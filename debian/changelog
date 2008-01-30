@@ -1,0 +1,5 @@
+vyatta-op-qos (0.1) unstable; urgency=low
+
+  * Initial Release.
+
+ -- Stephen Hemminger <stephen.hemminger@vyatta.com>  Wed, 30 Jan 2008 14:43:18 -0700

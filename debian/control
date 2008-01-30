@@ -1,0 +1,18 @@
+Source: vyatta-op-qos
+Section: contrib/net
+Priority: extra
+Maintainer: Stephen Hemminger <stephen.hemminger@vyatta.com>
+Build-Depends: debhelper (>= 5), autotools-dev
+Standards-Version: 3.7.2
+
+Package: vyatta-op-qos
+Architecture: all
+Depends: bash (>= 3.1),
+ vyatta-op
+Suggests: util-linux (>= 2.13-5),
+ net-tools,
+ ethtool,
+ ncurses-bin (>= 5.5-5),
+ ntpdate
+Description: Vyatta operational commands for qos.
+ Vyatta operational commands for qos.

@@ -1,0 +1,30 @@
+#! /bin/bash
+
+declare progname=${0##*/}
+
+_usage ()
+{
+    cat <<-EOF
+	Usage: $progname INTERFACE
+	       $progname INTERFACE filter
+	       $progname INTERFACE class
+	EOF
+}
+
+if [[ $# -lt 1 ]]; then
+    _usage
+    exit 1
+fi
+
+if [[ $# -eq 1 ]]; then
+	tc -s -d qdisc show dev $1
+else
+	case $2 in
+	filter )
+		tc filter show dev $1 ;;
+	class )
+		tc -s -d class show dev $1 ;;
+	 *)
+		_usage; exit 1;;
+	esac
+fi

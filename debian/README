@@ -1,0 +1,8 @@
+The Debian Package vyatta-op-qos
+-------------------------------------
+
+This package has the CLI template for the "show interfaces ethernet ethX queue"
+command
+
+
+ -- Stephen Hemminger <stephen.hemminger@vyatta.com> Fri 28 Dec 2007

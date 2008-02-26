@@ -1,3 +1,20 @@
+vyatta-op-qos (0.2) unstable; urgency=low
+
+  vc4.0.0
+  [ Mark O'Brien ]
+
+
+  [ Stephen Hemminger ]
+  * Change dependencies to include vyatta-iproute
+  * need path to tc command
+
+  [ rbalocca ]
+  * Add .gitignore to QOS repo
+
+  [ Mark O'Brien ]
+
+ -- Mark O'Brien <mobrien@vyatta.com>  Mon, 25 Feb 2008 17:39:16 -0800
+
 vyatta-op-qos (0.1) unstable; urgency=low
 
   * Initial Release.

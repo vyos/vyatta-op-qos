@@ -7,8 +7,9 @@ Standards-Version: 3.7.2
 
 Package: vyatta-op-qos
 Architecture: all
-Depends: bash (>= 3.1),
- vyatta-op, vyatta-iproute
+Depends: vyatta-op,
+ vyatta-bash,
+ vyatta-iproute
 Suggests: util-linux (>= 2.13-5),
  ethtool
 Description: Vyatta operational commands for QOS

@@ -1,3 +1,16 @@
+vyatta-op-qos (0.5) unstable; urgency=low
+
+  VC4.0.2
+  [ Mark O'Brien ]
+
+
+  [ Stephen Hemminger ]
+  * Add operational modes for Qos Vif
+
+  [ Mark O'Brien ]
+
+ -- Mark O'Brien <mobrien@vyatta.com>  Wed, 16 Apr 2008 09:50:20 -0700
+
 vyatta-op-qos (0.4) unstable; urgency=low
 
   3.0.2

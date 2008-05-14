@@ -21,7 +21,7 @@ if [[ $# -eq 1 ]]; then
 else
 	case $2 in
 	filter )
-		/sbin/tc filter show dev $1 ;;
+		/sbin/tc -p filter show dev $1 ;;
 	class )
 		/sbin/tc -s -d class show dev $1 ;;
 	 *)

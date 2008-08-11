@@ -9,7 +9,7 @@ Package: vyatta-op-qos
 Architecture: all
 Depends: vyatta-op,
  vyatta-bash | bash (>= 3.1),
- vyatta-iproute
+ iproute | vyatta-iproute
 Suggests: util-linux (>= 2.13-5),
  ethtool
 Description: Vyatta operational commands for QOS

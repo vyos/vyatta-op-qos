@@ -1,0 +1,2 @@
+help: Show ethernet queueing information
+run: ${vyatta_bindir}/vyatta-show-queueing.pl --brief

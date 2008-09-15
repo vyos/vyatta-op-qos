@@ -42,6 +42,7 @@ my %qdisc_types = (
     'prio'  => 'priority',
     'netem' => 'network-emulator',
     'gred'  => 'random-detect',
+    'hfsc'  => 'fair-share',
 );
 
 # This is only partially true names can really be anything.
@@ -110,13 +111,29 @@ sub show {
     print "$interface Output queue:\n";
     print "Class      Qos-Policy             Sent    Dropped   Overlimit\n";
 
-    open( my $tc, "/sbin/tc -s qdisc show dev $interface |" )
+    my $tc;
+    my %classmap = ();
+    
+    open($tc, "/sbin/tc class show dev $interface |")
       or die 'tc command failed: $!';
     while (<$tc>) {
+	# class htb 1:1 root rate 1000Kbit ceil 1000Kbit burst 1600b cburst 1600b 
+	# class htb 1:2 parent 1:1 leaf 8001: 
+	# class ieee80211 :2 parent 8001:
+	my (undef, undef, $id, $parent, $pid, $leaf, $qid) = split;
+	if ($parent eq 'parent' && $leaf eq 'leaf') {
+	    $classmap{$qid} = $id;
+	}
+    }
+    close $tc;
 
+    open($tc, "/sbin/tc -s qdisc show dev $interface |" )
+      or die 'tc command failed: $!';
+    my $rootid;
+    while (<$tc>) {
         # qdisc htb 1: root r2q 10 default 20 direct_packets...
-        my ( undef, $qdisc, $id, $parent ) = split;
-        $id =~ s/:$//;
+        # qdisc sfq 8001: parent 1:2 limit ...
+        my ( undef, $qdisc, $qid, $parent ) = split;
 
         #  Sent 13860 bytes 88 pkt (dropped 0, overlimits 0 requeues 0)
         $_ = <$tc>;
@@ -131,14 +148,17 @@ sub show {
         my $shaper = $qdisc_types{$qdisc};
         defined $shaper or $shaper = '[' . $qdisc . ']';
 
-        if ( $parent eq 'root' ) {
-            printf "%-10s %-16s %10d %10d %10d\n", $id, $shaper, $sent, $drop,
-              $over;
-        }
-        else {
-            printf "  %-8s %-16s %10d %10d %10d\n", $id, $shaper, $sent, $drop,
-              $over;
-        }
+	my $id = $classmap{$qid};
+	defined $id or $id = $qid;
+
+	if ($parent eq 'root') {
+	    printf "%-10s" , $id;
+	    $rootid = $id;
+	} else {
+	    $id =~ s/$rootid//;
+	    printf "  %-8s", $id;
+	}
+        printf "%-16s %10d %10d %10d\n", $shaper, $sent, $drop, $over;
     }
     close $tc;
 }

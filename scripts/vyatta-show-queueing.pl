@@ -37,6 +37,7 @@ my %qdisc_types = (
     'tbf'        => 'rate-limit',
     'htb'        => 'traffic-shaper',
     'pfifo' 	 => 'drop-tail',
+    'red'	 => 'random-detect',
 
     # future
     'prio'  => 'priority',
@@ -129,28 +130,34 @@ sub show {
 
     open($tc, "/sbin/tc -s qdisc show dev $interface |" )
       or die 'tc command failed: $!';
-    my $rootid;
+
+    my ($rootid, $qdisc, $parent, $qid);
     while (<$tc>) {
-        # qdisc htb 1: root r2q 10 default 20 direct_packets...
-        # qdisc sfq 8001: parent 1:2 limit ...
-        my ( undef, $qdisc, $qid, $parent ) = split;
+	chomp;
+	my @fields = split;
+	if ( $fields[0] eq 'qdisc') {
+	    # qdisc htb 1: root r2q 10 default 20 direct_packets...
+	    (undef, $qdisc, $qid, $parent) = @fields;
+	    next;
+	} 
 
-        #  Sent 13860 bytes 88 pkt (dropped 0, overlimits 0 requeues 0)
-        $_ = <$tc>;
-        chomp;
-        my ( undef, $sent, undef, undef, undef, undef, $drop, undef, $over ) =
-          split;
-        $drop =~ s/,$//;
+	# skip unwanted extra stats
+	next if ($fields[0] ne 'Sent');
+	
+	#  Sent 13860 bytes 88 pkt (dropped 0, overlimits 0 requeues 0)
+	my (undef, $sent, undef, undef, undef,  undef, $drop, undef, $over )
+	    = @fields;
+	# fix silly punctuation bug in tc
+	$drop =~ s/,$//;
 
-        #  rate 0bit 0pps backlog 0b 0p requeues 0
-        <$tc>;
+	my $shaper = $qdisc_types{$qdisc};
 
-        my $shaper = $qdisc_types{$qdisc};
-        defined $shaper or $shaper = '[' . $qdisc . ']';
+	# this only happens if user uses some qdisc not in pretty print list
+	defined $shaper or $shaper = '[' . $qdisc . ']';
 
 	my $id = $classmap{$qid};
 	defined $id or $id = $qid;
-
+	
 	if ($parent eq 'root') {
 	    printf "%-10s" , $id;
 	    $rootid = $id;
@@ -158,7 +165,7 @@ sub show {
 	    $id =~ s/$rootid//;
 	    printf "  %-8s", $id;
 	}
-        printf "%-16s %10d %10d %10d\n", $shaper, $sent, $drop, $over;
+	printf "%-16s %10d %10d %10d\n", $shaper, $sent, $drop, $over;
     }
     close $tc;
 }

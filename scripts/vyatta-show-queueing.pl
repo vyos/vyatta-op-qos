@@ -76,22 +76,26 @@ sub show_brief {
 
     # Read qdisc info
     open( my $tc, '/sbin/tc -s qdisc ls |' ) or die 'tc command failed';
-    while (<$tc>) {
 
-        # qdisc sfq 8003: dev eth1 root limit 127p quantum 1514b
-        my ( undef, $qdisc, undef, undef, $interface, $parent ) = split;
+    my ( $qdisc, $parent, $interface );
+    while (<$tc>) {
+        chomp;
+        my @fields = split;
+        if ( $fields[0] eq 'qdisc' ) {
+            # qdisc sfq 8003: dev eth1 root limit 127p quantum 1514b
+            ( undef, $qdisc, undef, undef, $interface, $parent ) = @fields;
+            next;
+        }
+
+        # skip unwanted extra stats
+        next if ( $fields[0] ne 'Sent' );
 
         #  Sent 13860 bytes 88 pkt (dropped 0, overlimits 0 requeues 0)
-        $_ = <$tc>;
-        chomp;
         my ( undef, $sent, undef, undef, undef, undef, $drop, undef, $over ) =
-          split;
+          @fields;
 
         # punctuation was never jamal's strong suit
         $drop =~ s/,$//;
-
-        #  rate 0bit 0pps backlog 0b 0p requeues 0
-        <$tc>;
 
         if ( $parent eq 'root' && $interface =~ $match ) {
             my $shaper = $qdisc_types{$qdisc};

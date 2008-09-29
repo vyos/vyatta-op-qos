@@ -36,8 +36,8 @@ my %qdisc_types = (
     'sfq'        => 'fair-queue',
     'tbf'        => 'rate-limit',
     'htb'        => 'traffic-shaper',
-    'pfifo' 	 => 'drop-tail',
-    'red'	 => 'random-detect',
+    'pfifo'      => 'drop-tail',
+    'red'        => 'random-detect',
 
     # future
     'prio'  => 'priority',
@@ -58,7 +58,7 @@ my %interface_types = (
     'adsl'      => 'adsl',
     'multilink' => 'ml',
     'wireless'  => 'wlan',
-    'bonding'	=> 'bond',
+    'bonding'   => 'bond',
 );
 
 sub show_brief {
@@ -114,58 +114,62 @@ sub show {
 
     my $tc;
     my %classmap = ();
-    
-    open($tc, "/sbin/tc class show dev $interface |")
+
+    open( $tc, "/sbin/tc class show dev $interface |" )
       or die 'tc command failed: $!';
     while (<$tc>) {
-	# class htb 1:1 root rate 1000Kbit ceil 1000Kbit burst 1600b cburst 1600b 
-	# class htb 1:2 parent 1:1 leaf 8001: 
-	# class ieee80211 :2 parent 8001:
-	my (undef, undef, $id, $parent, $pid, $leaf, $qid) = split;
-	if ($parent eq 'parent' && $leaf eq 'leaf') {
-	    $classmap{$qid} = $id;
-	}
+
+       # class htb 1:1 root rate 1000Kbit ceil 1000Kbit burst 1600b cburst 1600b
+       # class htb 1:2 parent 1:1 leaf 8001:
+       # class ieee80211 :2 parent 8001:
+        my ( undef, undef, $id, $parent, $pid, $leaf, $qid ) = split;
+        if ( $parent eq 'parent' && $leaf eq 'leaf' ) {
+            $classmap{$qid} = $id;
+        }
     }
     close $tc;
 
-    open($tc, "/sbin/tc -s qdisc show dev $interface |" )
+    open( $tc, "/sbin/tc -s qdisc show dev $interface |" )
       or die 'tc command failed: $!';
 
-    my ($rootid, $qdisc, $parent, $qid);
+    my ( $rootid, $qdisc, $parent, $qid );
     while (<$tc>) {
-	chomp;
-	my @fields = split;
-	if ( $fields[0] eq 'qdisc') {
-	    # qdisc htb 1: root r2q 10 default 20 direct_packets...
-	    (undef, $qdisc, $qid, $parent) = @fields;
-	    next;
-	} 
+        chomp;
+        my @fields = split;
+        if ( $fields[0] eq 'qdisc' ) {
 
-	# skip unwanted extra stats
-	next if ($fields[0] ne 'Sent');
-	
-	#  Sent 13860 bytes 88 pkt (dropped 0, overlimits 0 requeues 0)
-	my (undef, $sent, undef, undef, undef,  undef, $drop, undef, $over )
-	    = @fields;
-	# fix silly punctuation bug in tc
-	$drop =~ s/,$//;
+            # qdisc htb 1: root r2q 10 default 20 direct_packets...
+            ( undef, $qdisc, $qid, $parent ) = @fields;
+            next;
+        }
 
-	my $shaper = $qdisc_types{$qdisc};
+        # skip unwanted extra stats
+        next if ( $fields[0] ne 'Sent' );
 
-	# this only happens if user uses some qdisc not in pretty print list
-	defined $shaper or $shaper = '[' . $qdisc . ']';
+        #  Sent 13860 bytes 88 pkt (dropped 0, overlimits 0 requeues 0)
+        my ( undef, $sent, undef, undef, undef, undef, $drop, undef, $over ) =
+          @fields;
 
-	my $id = $classmap{$qid};
-	defined $id or $id = $qid;
-	
-	if ($parent eq 'root') {
-	    printf "%-10s" , $id;
-	    $rootid = $id;
-	} else {
-	    $id =~ s/$rootid//;
-	    printf "  %-8s", $id;
-	}
-	printf "%-16s %10d %10d %10d\n", $shaper, $sent, $drop, $over;
+        # fix silly punctuation bug in tc
+        $drop =~ s/,$//;
+
+        my $shaper = $qdisc_types{$qdisc};
+
+        # this only happens if user uses some qdisc not in pretty print list
+        defined $shaper or $shaper = '[' . $qdisc . ']';
+
+        my $id = $classmap{$qid};
+        defined $id or $id = $qid;
+
+        if ( $parent eq 'root' ) {
+            printf "%-10s", $id;
+            $rootid = $id;
+        }
+        else {
+            $id =~ s/$rootid//;
+            printf "  %-8s", $id;
+        }
+        printf "%-16s %10d %10d %10d\n", $shaper, $sent, $drop, $over;
     }
     close $tc;
 }
@@ -186,10 +190,10 @@ if ( $#ARGV == -1 ) {
     my $match = '.+';    # match anything
 
     if ($intf_type) {
-	my $prefix = $interface_types{$intf_type};
-	defined $prefix
-	    or die "Unknown interface type $intf_type\n";
-	$match = "^$prefix\\d(\\.\\d)?\$";
+        my $prefix = $interface_types{$intf_type};
+        defined $prefix
+          or die "Unknown interface type $intf_type\n";
+        $match = "^$prefix\\d(\\.\\d)?\$";
     }
 
     open( my $ip, '/sbin/ip link show |' ) or die 'ip command failed';
@@ -200,8 +204,8 @@ if ( $#ARGV == -1 ) {
         $interface =~ s/:$//;
 
         if ( $interface =~ $match ) {
-	    unshift @ARGV, $interface;
-	}
+            unshift @ARGV, $interface;
+        }
 
         #    link/loopback ....
         <$ip>;

@@ -38,6 +38,7 @@ my %qdisc_types = (
     'htb'        => 'traffic-shaper',
     'pfifo'      => 'drop-tail',
     'red'        => 'random-detect',
+    'ingress'	 => 'traffic-limiter',
 
     # future
     'prio'  => 'priority',
@@ -62,7 +63,8 @@ my %interface_types = (
 );
 
 sub show_brief {
-    my $match = '.+';    # match anything
+    my $match = '.+';    # match anythingnna
+    my %ingress;
 
     if ($intf_type) {
         my $prefix = $interface_types{$intf_type};
@@ -71,19 +73,20 @@ sub show_brief {
         $match = "^$prefix\\d(\\.\\d)?\$";
     }
 
-    print "Output queues:\n";
-    print "Interface  Qos-Policy             Sent    Dropped   Overlimit\n";
+    print "Output Queues:\n";
+    my $fmt = "%-10s %-16s %10s %10s %10s\n";
+    printf $fmt, 'Interface', 'Qos-Policy','Sent','Dropped','Overlimit';
 
     # Read qdisc info
     open( my $tc, '/sbin/tc -s qdisc ls |' ) or die 'tc command failed';
 
-    my ( $qdisc, $parent, $interface );
+    my ( $qdisc, $parent, $interface, $id );
     while (<$tc>) {
         chomp;
         my @fields = split;
         if ( $fields[0] eq 'qdisc' ) {
-            # qdisc sfq 8003: dev eth1 root limit 127p quantum 1514b
-            ( undef, $qdisc, undef, undef, $interface, $parent ) = @fields;
+	    # qdisc sfq 8003: dev eth1 root limit 127p quantum 1514b
+            ( undef, $qdisc, $id, undef, $interface, $parent ) = @fields;
             next;
         }
 
@@ -93,28 +96,42 @@ sub show_brief {
         #  Sent 13860 bytes 88 pkt (dropped 0, overlimits 0 requeues 0)
         my ( undef, $sent, undef, undef, undef, undef, $drop, undef, $over ) =
           @fields;
-
+	
         # punctuation was never jamal's strong suit
         $drop =~ s/,$//;
 
-        if ( $parent eq 'root' && $interface =~ $match ) {
+	if ( $interface =~ $match ) {
             my $shaper = $qdisc_types{$qdisc};
             defined $shaper or $shaper = '[' . $qdisc . ']';
 
-            printf "%-10s %-16s %10d %10d %10d\n", $interface, $shaper, $sent,
-              $drop, $over;
+	    if ( $id eq 'ffff:') {
+		my @args = ($interface, $shaper, $sent, $drop, $over);
+		$ingress{$interface} = \@args;
+	    } elsif ( $parent eq 'root' ) {
+		printf $fmt,  $interface, $shaper, $sent, $drop, $over;
+	    }
         }
     }
     close $tc;
+    
+    if (%ingress) {
+	print "\nInput:\n";
+	printf $fmt, 'Interface', 'Qos-Policy','Received','Dropped','Overlimit';
+	foreach $interface (keys %ingress) {
+	    my $args = $ingress{$interface};
+	    printf $fmt, @$args;
+	}
+    }
 }
 
-# FIXME This needs to change to deal with multi-level tree and ingress
+# FIXME This needs to change to deal with multi-level tree
 sub show {
     my $interface = shift;
+    my $fmt = "%-10s  %-16s %-10s %-10s %-10s\n";
 
     print "\n";
-    print "$interface Output queue:\n";
-    print "Class      Qos-Policy             Sent    Dropped   Overlimit\n";
+    print "$interface Output Queueing:\n";
+    printf $fmt, 'Class', 'Qos-Policy', 'Sent','Dropped','Overlimit';
 
     my $tc;
     my %classmap = ();
@@ -137,6 +154,8 @@ sub show {
       or die 'tc command failed: $!';
 
     my ( $rootid, $qdisc, $parent, $qid );
+    my @ingress;
+
     while (<$tc>) {
         chomp;
         my @fields = split;
@@ -162,20 +181,32 @@ sub show {
         # this only happens if user uses some qdisc not in pretty print list
         defined $shaper or $shaper = '[' . $qdisc . ']';
 
-        my $id = $classmap{$qid};
-        defined $id or $id = $qid;
+	my $id = $classmap{$qid};
+	defined $id or $id = $qid;
 
-        if ( $parent eq 'root' ) {
-            printf "%-10s", $id;
-            $rootid = $id;
-        }
-        else {
-            $id =~ s/$rootid//;
-            printf "  %-8s", $id;
-        }
-        printf "%-16s %10d %10d %10d\n", $shaper, $sent, $drop, $over;
+	if ($qid eq 'ffff:') {
+	    # print ingress later
+	    @ingress = ($id, $shaper, $sent, $drop, $over);
+	    next;
+	} 
+
+	if ( $parent eq 'root' ) {
+	    $rootid = $id;
+	    $id = 'root';
+	} else {
+	    $id =~ s/$rootid//;
+	    $id = sprintf("  %-8s", $id);
+	}
+
+        printf $fmt, $id, $shaper, $sent, $drop, $over;
     }
     close $tc;
+
+    if (@ingress) {
+	print "$interface Input:\n";
+	printf $fmt, 'Class', 'Qos-Policy', 'Received','Dropped','Overlimit';
+	printf $fmt, @ingress;
+    }
 }
 
 sub usage {

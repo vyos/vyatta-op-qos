@@ -248,7 +248,7 @@ if ( $#ARGV == -1 ) {
     close $ip;
 }
 
-foreach my $interface (@ARGV) {
+foreach my $interface (sort @ARGV) {
     show($interface);
 }
 

@@ -186,7 +186,7 @@ sub show {
 
 	if ($qid eq 'ffff:') {
 	    # print ingress later
-	    @ingress = ($id, $shaper, $sent, $drop, $over);
+	    @ingress = ($shaper, $sent, $drop, $over);
 	    next;
 	} 
 
@@ -203,8 +203,9 @@ sub show {
     close $tc;
 
     if (@ingress) {
-	print "$interface Input:\n";
-	printf $fmt, 'Class', 'Qos-Policy', 'Received','Dropped','Overlimit';
+	print "\n$interface Input:\n";
+        $fmt = "%-16s %-10s %-10s %-10s\n";
+	printf $fmt, 'Qos-Policy', 'Received','Dropped','Overlimit';
 	printf $fmt, @ingress;
     }
 }

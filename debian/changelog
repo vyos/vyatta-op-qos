@@ -1,3 +1,15 @@
+vyatta-op-qos (0.12.1) unstable; urgency=low
+
+  [ Stephen Hemminger ]
+  * Fix vif in show queueing
+
+  [ An-Cheng Huang ]
+  * add support for development build
+  * update maintainer information
+  * "files" file should be removed before package build
+
+ -- An-Cheng Huang <ancheng@vyatta.com>  Thu, 08 Jan 2009 09:39:34 -0800
+
 vyatta-op-qos (0.12) unstable; urgency=low
 
 	  3.2.0

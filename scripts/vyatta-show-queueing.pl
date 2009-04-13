@@ -22,13 +22,16 @@
 #
 # **** End License ****
 #
-use Getopt::Long;
 
 use strict;
 use warnings;
 
+use Getopt::Long;
+use lib "/opt/vyatta/share/perl5/";
+use Vyatta::Interface;
+use Vyatta::Misc;
+
 my $intf_type;
-my $summary;
 
 # Map from kernel qdisc names to configuration names
 my %qdisc_types = (
@@ -38,13 +41,10 @@ my %qdisc_types = (
     'htb'        => 'traffic-shaper',
     'pfifo'      => 'drop-tail',
     'red'        => 'random-detect',
-    'ingress'	 => 'traffic-limiter',
-
-    # future
-    'prio'  => 'priority',
-    'netem' => 'network-emulator',
-    'gred'  => 'random-detect',
-    'hfsc'  => 'fair-share',
+    'ingress'    => 'traffic-limiter',
+    'drr'        => 'round-robin',
+    'prio'       => 'priority-queue',
+    'netem'      => 'network-emulator',
 );
 
 # This is only partially true names can really be anything.
@@ -63,30 +63,23 @@ my %interface_types = (
 );
 
 sub show_brief {
-    my $match = '.+';    # match anythingnna
     my %ingress;
-
-    if ($intf_type) {
-        my $prefix = $interface_types{$intf_type};
-        defined $prefix
-          or die "Unknown interface type $intf_type\n";
-        $match = "^$prefix\\d(\\.\\d)?\$";
-    }
 
     print "Output Queues:\n";
     my $fmt = "%-10s %-16s %10s %10s %10s\n";
-    printf $fmt, 'Interface', 'Qos-Policy','Sent','Dropped','Overlimit';
+    printf $fmt, 'Interface', 'Qos-Policy', 'Sent', 'Dropped', 'Overlimit';
 
     # Read qdisc info
     open( my $tc, '/sbin/tc -s qdisc ls |' ) or die 'tc command failed';
 
-    my ( $qdisc, $parent, $interface, $id );
+    my ( $qdisc, $parent, $ifname, $id );
     while (<$tc>) {
         chomp;
         my @fields = split;
         if ( $fields[0] eq 'qdisc' ) {
-	    # qdisc sfq 8003: dev eth1 root limit 127p quantum 1514b
-            ( undef, $qdisc, $id, undef, $interface, $parent ) = @fields;
+
+            # qdisc sfq 8003: dev eth1 root limit 127p quantum 1514b
+            ( undef, $qdisc, $id, undef, $ifname, $parent ) = @fields;
             next;
         }
 
@@ -96,42 +89,48 @@ sub show_brief {
         #  Sent 13860 bytes 88 pkt (dropped 0, overlimits 0 requeues 0)
         my ( undef, $sent, undef, undef, undef, undef, $drop, undef, $over ) =
           @fields;
-	
+
         # punctuation was never jamal's strong suit
         $drop =~ s/,$//;
 
-	if ( $interface =~ $match ) {
-            my $shaper = $qdisc_types{$qdisc};
-            defined $shaper or $shaper = '[' . $qdisc . ']';
+        my $shaper = $qdisc_types{$qdisc};
+        defined $shaper or $shaper = '[' . $qdisc . ']';
 
-	    if ( $id eq 'ffff:') {
-		my @args = ($interface, $shaper, $sent, $drop, $over);
-		$ingress{$interface} = \@args;
-	    } elsif ( $parent eq 'root' ) {
-		printf $fmt,  $interface, $shaper, $sent, $drop, $over;
-	    }
+        if ( $id eq 'ffff:' ) {
+            my @args = ( $ifname, $shaper, $sent, $drop, $over );
+            $ingress{$ifname} = \@args;
+        }
+        elsif ( $parent eq 'root' ) {
+            if ($intf_type) {
+                my $intf = new Vyatta::Interface($ifname);
+                next unless ( $intf && ( $intf->type() eq $intf_type ) );
+            }
+
+            printf $fmt, $ifname, $shaper, $sent, $drop, $over;
         }
     }
     close $tc;
-    
+
     if (%ingress) {
-	print "\nInput:\n";
-	printf $fmt, 'Interface', 'Qos-Policy','Received','Dropped','Overlimit';
-	foreach $interface (keys %ingress) {
-	    my $args = $ingress{$interface};
-	    printf $fmt, @$args;
-	}
+        print "\nInput:\n";
+        printf $fmt, 'Ifname', 'Qos-Policy', 'Received', 'Dropped', 'Overlimit';
+
+        foreach my $name ( keys %ingress ) {
+            my $args = $ingress{$name};
+            printf $fmt, @$args;
+        }
     }
 }
 
 # FIXME This needs to change to deal with multi-level tree
 sub show {
     my $interface = shift;
-    my $fmt = "%-10s  %-16s %-10s %-10s %-10s\n";
+    my $fmt       = "%-10s  %-16s %-10s %-10s %-10s %-10s\n";
 
     print "\n";
     print "$interface Output Queueing:\n";
-    printf $fmt, 'Class', 'Qos-Policy', 'Sent','Dropped','Overlimit';
+    printf $fmt, 'Class', 'Qos-Policy', 'Sent', 'Dropped', 'Overlimit',
+      'Queued';
 
     my $tc;
     my %classmap = ();
@@ -156,6 +155,7 @@ sub show {
     my ( $rootid, $qdisc, $parent, $qid );
     my @ingress;
 
+    my ( $shaper, $id, $sent, $drop, $over, $backlog );
     while (<$tc>) {
         chomp;
         my @fields = split;
@@ -167,46 +167,54 @@ sub show {
         }
 
         # skip unwanted extra stats
-        next if ( $fields[0] ne 'Sent' );
+        if ( $fields[0] eq 'Sent' ) {
 
-        #  Sent 13860 bytes 88 pkt (dropped 0, overlimits 0 requeues 0)
-        my ( undef, $sent, undef, undef, undef, undef, $drop, undef, $over ) =
-          @fields;
+            #  Sent 13860 bytes 88 pkt (dropped 0, overlimits 0 requeues 0)
+            ( undef, $sent, undef, undef, undef, undef, $drop, undef, $over ) =
+              @fields;
 
-        # fix silly punctuation bug in tc
-        $drop =~ s/,$//;
+            # fix silly punctuation bug in tc
+            $drop =~ s/,$//;
 
-        my $shaper = $qdisc_types{$qdisc};
+            $shaper = $qdisc_types{$qdisc};
 
-        # this only happens if user uses some qdisc not in pretty print list
-        defined $shaper or $shaper = '[' . $qdisc . ']';
+            # this only happens if user uses some qdisc not in pretty print list
+            defined $shaper or $shaper = '[' . $qdisc . ']';
 
-	my $id = $classmap{$qid};
-	defined $id or $id = $qid;
+            $id = $classmap{$qid};
+            defined $id or $id = $qid;
 
-	if ($qid eq 'ffff:') {
-	    # print ingress later
-	    @ingress = ($shaper, $sent, $drop, $over);
-	    next;
-	} 
+            if ( $qid eq 'ffff:' ) {
 
-	if ( $parent eq 'root' ) {
-	    $rootid = $id;
-	    $id = 'root';
-	} else {
-	    $id =~ s/$rootid//;
-	    $id = sprintf("  %-8s", $id);
-	}
+                # print ingress later
+                @ingress = ( $shaper, $sent, $drop, $over );
+                next;
+            }
 
-        printf $fmt, $id, $shaper, $sent, $drop, $over;
+            if ( $parent eq 'root' ) {
+                $rootid = $id;
+                $id     = 'root';
+            }
+            else {
+                $id =~ s/$rootid//;
+                $id = sprintf( "  %-8s", $id );
+            }
+        }
+        elsif ( $fields[0] eq 'rate' ) {
+
+            # rate 0bit 0pps backlog 0b 23p requeues 0
+            ( undef, undef, undef, undef, undef, $backlog ) = @fields;
+
+            printf $fmt, $id, $shaper, $sent, $drop, $over, $backlog;
+        }
     }
     close $tc;
 
     if (@ingress) {
-	print "\n$interface Input:\n";
+        print "\n$interface Input:\n";
         $fmt = "%-16s %-10s %-10s %-10s\n";
-	printf $fmt, 'Qos-Policy', 'Received','Dropped','Overlimit';
-	printf $fmt, @ingress;
+        printf $fmt, 'Qos-Policy', 'Received', 'Dropped', 'Overlimit';
+        printf $fmt, @ingress;
     }
 }
 
@@ -223,33 +231,16 @@ GetOptions(
 
 # if no arguments given, rebuild ARGV with list of all interfaces
 if ( $#ARGV == -1 ) {
-    my $match = '.+';    # match anything
-
-    if ($intf_type) {
-        my $prefix = $interface_types{$intf_type};
-        defined $prefix
-          or die "Unknown interface type $intf_type\n";
-        $match = "^$prefix\\d(\\.\\d)?\$";
-    }
-
-    open( my $ip, '/sbin/ip link show |' ) or die 'ip command failed';
-    while (<$ip>) {
-
-        # 1: lo: <LOOPBACK, UP,>...
-        my ( undef, $interface ) = split;
-        $interface =~ s/:$//;
-
-        if ( $interface =~ $match ) {
-            unshift @ARGV, $interface;
+    foreach my $ifname ( getInterfaces() ) {
+        if ($intf_type) {
+            my $intf = new Vyatta::Interface($ifname);
+            next unless ( $intf && $intf_type eq $intf->type() );
         }
-
-        #    link/loopback ....
-        <$ip>;
+        push @ARGV, $ifname;
     }
-    close $ip;
 }
 
-foreach my $interface (sort @ARGV) {
+foreach my $interface ( sort @ARGV ) {
     show($interface);
 }
 

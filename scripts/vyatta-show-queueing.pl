@@ -204,6 +204,7 @@ sub show {
 
             # rate 0bit 0pps backlog 0b 23p requeues 0
             ( undef, undef, undef, undef, undef, $backlog ) = @fields;
+	    $backlog =~ s/p$//;
 
             printf $fmt, $id, $shaper, $sent, $drop, $over, $backlog;
         }

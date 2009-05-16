@@ -27,6 +27,8 @@ use strict;
 use warnings;
 
 use Getopt::Long;
+use Tree::Simple;
+
 use lib "/opt/vyatta/share/perl5/";
 use Vyatta::Interface;
 use Vyatta::Misc;
@@ -47,20 +49,14 @@ my %qdisc_types = (
     'netem'      => 'network-emulator',
 );
 
-# This is only partially true names can really be anything.
-my %interface_types = (
-    'ethernet'  => 'eth',
-    'serial'    => 'wan',
-    'tunnel'    => 'tun',
-    'bridge'    => 'br',
-    'loopback'  => 'lo',
-    'pppoe'     => 'pppoe',
-    'pppoa'     => 'pppoa',
-    'adsl'      => 'adsl',
-    'multilink' => 'ml',
-    'wireless'  => 'wlan',
-    'bonding'   => 'bond',
-);
+# Convert from kernel to vyatta nams
+sub shaper {
+    my $qdisc  = shift;
+    my $shaper = $qdisc_types{$qdisc};
+
+    defined $shaper or $shaper = '[' . $qdisc . ']';
+    return $shaper;
+}
 
 sub show_brief {
     my %ingress;
@@ -93,12 +89,9 @@ sub show_brief {
         # punctuation was never jamal's strong suit
         $drop =~ s/,$//;
 
-        my $shaper = $qdisc_types{$qdisc};
-        defined $shaper or $shaper = '[' . $qdisc . ']';
-
         if ( $id eq 'ffff:' ) {
-            my @args = ( $ifname, $shaper, $sent, $drop, $over );
-            $ingress{$ifname} = \@args;
+            $ingress{$ifname} =
+              [ $ifname, shaper($qdisc), $sent, $drop, $over ];
         }
         elsif ( $parent eq 'root' ) {
             if ($intf_type) {
@@ -106,7 +99,7 @@ sub show_brief {
                 next unless ( $intf && ( $intf->type() eq $intf_type ) );
             }
 
-            printf $fmt, $ifname, $shaper, $sent, $drop, $over;
+            printf $fmt, $ifname, shaper($qdisc), $sent, $drop, $over;
         }
     }
     close $tc;
@@ -122,101 +115,185 @@ sub show_brief {
     }
 }
 
-# FIXME This needs to change to deal with multi-level tree
-sub show {
-    my $interface = shift;
-    my $fmt       = "%-10s  %-16s %-10s %-10s %-10s %-10s\n";
+sub byclassid {
+    my ($a1, $a2) = ($a =~ m/([0-9a-f]+):([0-9a-f]+)/);
+    my ($b1, $b2) = ($b =~ m/([0-9a-f]+):([0-9a-f]+)/);
+    return $a2 <=> $b2 if ($a1 == $b1);
+    return $a1 <=> $b1;
+}
 
-    print "\n";
-    print "$interface Output Queueing:\n";
-    printf $fmt, 'Class', 'Qos-Policy', 'Sent', 'Dropped', 'Overlimit',
-      'Queued';
+sub class2tree {
+    my ( $classes, $parentid, $parent ) = @_;
 
-    my $tc;
-    my %classmap = ();
-
-    open( $tc, "/sbin/tc class show dev $interface |" )
-      or die 'tc command failed: $!';
-    while (<$tc>) {
-
-       # class htb 1:1 root rate 1000Kbit ceil 1000Kbit burst 1600b cburst 1600b
-       # class htb 1:2 parent 1:1 leaf 8001:
-       # class ieee80211 :2 parent 8001:
-        my ( undef, undef, $id, $parent, $pid, $leaf, $qid ) = split;
-        if ( $parent eq 'parent' && $leaf eq 'leaf' ) {
-            $classmap{$qid} = $id;
-        }
+    foreach my $id ( sort byclassid keys %{$classes} ) {
+        my $class = $classes->{$id};
+        next unless ( $class->{parent} && $class->{parent} eq $parentid );
+        my $node = Tree::Simple->new( $class->{info} );
+	$parent->addChild($node);
+        class2tree( $classes, $id, $node );
     }
-    close $tc;
 
-    open( $tc, "/sbin/tc -s qdisc show dev $interface |" )
+    return $parent;
+}
+
+# Build a tree of output information
+# (This is N^2 but not a big issue)
+sub get_class {
+    my ( $interface, $rootq, $qdisc ) = @_;
+    my %classes;
+
+    open( my $tc, "/sbin/tc -s class show dev $interface |" )
       or die 'tc command failed: $!';
 
-    my ( $rootid, $qdisc, $parent, $qid );
-    my @ingress;
-
-    my ( $shaper, $id, $sent, $drop, $over, $backlog );
+    my ( $id, $name, $sent, $drop, $over, $root, $leaf, $parent );
     while (<$tc>) {
         chomp;
-        my @fields = split;
-        if ( $fields[0] eq 'qdisc' ) {
-
-            # qdisc htb 1: root r2q 10 default 20 direct_packets...
-            ( undef, $qdisc, $qid, $parent ) = @fields;
+        /^class/ && do {
+	    # class htb 1:1 root rate 1000Kbit ceil 1000Kbit burst 1600b cburst 1600b
+	    # class htb 1:2 parent 1:1 leaf 8001:
+	    # class ieee80211 :2 parent 8001:
+            my ( $l, $q, $t );
+            ( undef, $name, $id, $t, $parent, $l, $q ) = split;
+	    $leaf = undef;
+	    if ($t eq 'root') {
+		$parent = undef;
+	    } elsif ($t eq 'parent') {
+		if ($l eq 'leaf') {
+		    $q =~ s/:$//;
+		    $leaf = hex($q);
+		}
+	    } else {
+		die "confused by tc class output for type 'class $name $id $t'";
+	    }
             next;
-        }
+        };
 
-        # skip unwanted extra stats
-        if ( $fields[0] eq 'Sent' ) {
-
+        /^ Sent/ && do {
             #  Sent 13860 bytes 88 pkt (dropped 0, overlimits 0 requeues 0)
             ( undef, $sent, undef, undef, undef, undef, $drop, undef, $over ) =
-              @fields;
+              split;
 
             # fix silly punctuation bug in tc
             $drop =~ s/,$//;
+            next;
+        };
 
-            $shaper = $qdisc_types{$qdisc};
-
-            # this only happens if user uses some qdisc not in pretty print list
-            defined $shaper or $shaper = '[' . $qdisc . ']';
-
-            $id = $classmap{$qid};
-            defined $id or $id = $qid;
-
-            if ( $qid eq 'ffff:' ) {
-
-                # print ingress later
-                @ingress = ( $shaper, $sent, $drop, $over );
-                next;
+        /^ rate/ && do {
+            #  rate 0bit 0pps backlog 0b 23p requeues 0
+            my ( undef, $rate, undef, undef, undef, $backlog ) = split;
+            $backlog =~ s/p$//;
+            $rate    =~ s/bit$//;
+	    
+	    my ($maj, $min) = ($id =~ m/([0-9a-f]+):([0-9a-f]+)/);
+	    next if ($maj != $rootq);
+            my @args = ( hex($min) );
+            if ($leaf) {
+		my $qdisc_info = $qdisc->{$leaf};
+		die "info for $leaf is unknown" unless $qdisc_info;
+                push @args, @{ $qdisc_info };
+            } else {
+                push @args, shaper($name), $sent, $drop, $over, $rate, $backlog;
             }
+            $classes{$id} = {
+                id     => $id,
+                parent => $parent,
+                info   => \@args,
+            };
 
-            if ( $parent eq 'root' ) {
-                $rootid = $id;
-                $id     = 'root';
-            }
-            else {
-                $id =~ s/$rootid//;
-                $id = sprintf( "  %-8s", $id );
-            }
-        }
-        elsif ( $fields[0] eq 'rate' ) {
+            $root = $classes{$id} unless $parent;
+            next;
+          }
+    }
+    close $tc;
+    return unless $root;
 
+    return class2tree( \%classes, $root->{id},
+        Tree::Simple->new( $root->{info}, Tree::Simple->ROOT ) );
+}
+
+# This collects all the qdisc information into one hash
+# and root queue id and reference to map of qdisc to statistics
+sub get_qdisc {
+    my $interface = shift;
+    my %qdisc;
+    my $root;
+
+    open( my $tc, "/sbin/tc -s qdisc show dev $interface |" )
+      or die 'tc command failed: $!';
+
+    my ( $qid, $name, $sent, $drop, $over );
+    while (<$tc>) {
+        chomp;
+        /^qdisc/ && do {
+            # qdisc htb 1: root r2q 10 default 20 direct_packets...
+            my $t;
+            ( undef, $name, $qid, $t ) = split;
+            $qid =~ s/:.*$//;
+            $qid = hex($qid);
+            $root = $qid if ( $t eq 'root' );
+            next;
+        };
+
+        /^ Sent/ && do {
+            #  Sent 13860 bytes 88 pkt (dropped 0, overlimits 0 requeues 0)
+            ( undef, $sent, undef, undef, undef, undef, $drop, undef, $over ) =
+              split;
+
+            # fix silly punctuation bug in tc
+            $drop =~ s/,$//;
+            next;
+        };
+
+        /^ rate/ && do {
             # rate 0bit 0pps backlog 0b 23p requeues 0
-            ( undef, undef, undef, undef, undef, $backlog ) = @fields;
-	    $backlog =~ s/p$//;
+            my ( undef, $rate, undef, undef, undef, $backlog ) = split;
 
-            printf $fmt, $id, $shaper, $sent, $drop, $over, $backlog;
-        }
+            $backlog =~ s/p$//;
+            $rate    =~ s/bit$//;
+
+            $qdisc{$qid} = [ shaper($name), $sent, $drop, $over, $rate, $backlog ];
+          }
     }
     close $tc;
 
-    if (@ingress) {
-        print "\n$interface Input:\n";
-        $fmt = "%-16s %-10s %-10s %-10s\n";
-        printf $fmt, 'Qos-Policy', 'Received', 'Dropped', 'Overlimit';
-        printf $fmt, @ingress;
-    }
+    return ( $root, \%qdisc );
+}
+
+my $INGRESS = 0xffff;
+
+sub show_queues {
+    my ( $interface, $root, $qdisc ) = @_;
+    my $args = $qdisc->{$root};
+    return unless $args;
+
+    my $fmt     = "%-10s %-16s %-10s %-9s %-9s %-9s %s\n";
+    print "\n$interface ", ( ( $root eq $INGRESS ) ? 'Input' : 'Output' ),
+      " Queueing:\n";
+    printf $fmt, 'Class', 'Qos-Policy',
+      ( ( $root eq $INGRESS ) ? 'Received' : 'Sent' ),
+      'Dropped', 'Overlimit', 'Rate', 'Queued';
+
+    printf $fmt, 'root', @{$args};
+
+    my $tree = get_class( $interface, $root, $qdisc );
+    return unless $tree;
+
+    $tree->traverse( sub { my $_tree = shift;
+			   my @args = @{ $_tree->getNodeValue() };
+			   my $id = shift @args;
+			   printf $fmt, ('  ' x $_tree->getDepth() . $id ), @args;
+		     });
+}
+
+sub show {
+    my $interface = shift;
+    my ( $root, $qdisc ) = get_qdisc($interface);
+
+    # if no queuing then no output
+    return unless defined $root;
+
+    show_queues( $interface, $root,    $qdisc );
+    show_queues( $interface, $INGRESS, $qdisc );
 }
 
 sub usage {
@@ -244,4 +321,3 @@ if ( $#ARGV == -1 ) {
 foreach my $interface ( sort @ARGV ) {
     show($interface);
 }
-

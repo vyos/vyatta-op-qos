@@ -1,3 +1,9 @@
+vyatta-op-qos (0.12.2) unstable; urgency=low
+
+  * Update show queuing script
+
+ -- Stephen Hemminger <stephen.hemminger@vyatta.com>  Mon, 13 Apr 2009 16:24:04 -0700
+
 vyatta-op-qos (0.12.1) unstable; urgency=low
 
   [ Stephen Hemminger ]

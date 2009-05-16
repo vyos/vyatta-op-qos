@@ -1,3 +1,10 @@
+vyatta-op-qos (0.12.3) unstable; urgency=low
+
+  * Remove extra p from Backlog
+  * Update show queueing command
+
+ -- Stephen Hemminger <stephen.hemminger@vyatta.com>  Fri, 15 May 2009 23:02:38 -0700
+
 vyatta-op-qos (0.12.2) unstable; urgency=low
 
   * Update show queuing script

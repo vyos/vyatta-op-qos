@@ -47,6 +47,7 @@ my %qdisc_types = (
     'drr'        => 'round-robin',
     'prio'       => 'priority-queue',
     'netem'      => 'network-emulator',
+    'gred'	 => 'weighted-random',
 );
 
 # Convert from kernel to vyatta nams

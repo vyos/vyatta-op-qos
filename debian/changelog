@@ -1,3 +1,9 @@
+vyatta-op-qos (0.12.4) unstable; urgency=low
+
+  * Add support for WRED
+
+ -- Stephen Hemminger <stephen.hemminger@vyatta.com>  Tue, 19 May 2009 15:58:17 -0700
+
 vyatta-op-qos (0.12.3) unstable; urgency=low
 
   * Remove extra p from Backlog

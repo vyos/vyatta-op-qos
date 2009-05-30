@@ -1,3 +1,9 @@
+vyatta-op-qos (0.12.5) unstable; urgency=low
+
+  * UNRELEASED
+
+ -- An-Cheng Huang <ancheng@vyatta.com>  Fri, 29 May 2009 18:36:37 -0700
+
 vyatta-op-qos (0.12.4) unstable; urgency=low
 
   * Add support for WRED

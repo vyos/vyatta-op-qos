@@ -69,12 +69,12 @@ sub show_brief {
     # Read qdisc info
     open( my $tc, '/sbin/tc -s qdisc ls |' ) or die 'tc command failed';
 
+    my @lines;
     my ( $qdisc, $parent, $ifname, $id );
     while (<$tc>) {
         chomp;
         my @fields = split;
         if ( $fields[0] eq 'qdisc' ) {
-
             # qdisc sfq 8003: dev eth1 root limit 127p quantum 1514b
             ( undef, $qdisc, $id, undef, $ifname, $parent ) = @fields;
             next;
@@ -100,10 +100,11 @@ sub show_brief {
                 next unless ( $intf && ( $intf->type() eq $intf_type ) );
             }
 
-            printf $fmt, $ifname, shaper($qdisc), $sent, $drop, $over;
+	    push @lines, sprintf $fmt, $ifname, shaper($qdisc), $sent, $drop, $over;
         }
     }
     close $tc;
+    print sort @lines;
 
     if (%ingress) {
         print "\nInput:\n";

@@ -117,11 +117,14 @@ sub show_brief {
     }
 }
 
+# Sort by class id which is a string of form major:minor
+# NB: numbers are hex
 sub byclassid {
     my ($a1, $a2) = ($a =~ m/([0-9a-f]+):([0-9a-f]+)/);
     my ($b1, $b2) = ($b =~ m/([0-9a-f]+):([0-9a-f]+)/);
-    return $a2 <=> $b2 if ($a1 == $b1);
-    return $a1 <=> $b1;
+
+    return hex($a2) <=> hex($b2) if ($a1 == $b1);
+    return hex($a1) <=> hex($b1);
 }
 
 sub class2tree {
@@ -186,8 +189,13 @@ sub get_class {
             $backlog =~ s/p$//;
             $rate    =~ s/bit$//;
 	    
+	    # split $id of form 1:10 into parent, child id
 	    my ($maj, $min) = ($id =~ m/([0-9a-f]+):([0-9a-f]+)/);
-	    next if ($maj != $rootq);
+
+	    # TODO handle nested classes??
+	    next if (hex($maj) != $rootq);
+
+	    # record info for display
             my @args = ( hex($min) );
             if ($leaf) {
 		my $qdisc_info = $qdisc->{$leaf};

@@ -1,3 +1,9 @@
+vyatta-op-qos (0.12.8) unstable; urgency=low
+
+  * Show queueing for interfaces with no output queue
+
+ -- Stephen Hemminger <stephen.hemminger@vyatta.com>  Thu, 21 Jan 2010 22:08:23 -0800
+
 vyatta-op-qos (0.12.7) unstable; urgency=low
 
   * Fix sorting of class id

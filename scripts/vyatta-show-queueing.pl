@@ -299,10 +299,7 @@ sub show {
     my $interface = shift;
     my ( $root, $qdisc ) = get_qdisc($interface);
 
-    # if no queuing then no output
-    return unless defined $root;
-
-    show_queues( $interface, $root,    $qdisc );
+    show_queues( $interface, $root,    $qdisc ) if $root;
     show_queues( $interface, $INGRESS, $qdisc );
 }
 

@@ -55,8 +55,7 @@ sub shaper {
     my $qdisc  = shift;
     my $shaper = $qdisc_types{$qdisc};
 
-    defined $shaper or $shaper = '[' . $qdisc . ']';
-    return $shaper;
+    return $shaper ? $shaper : '[' . $qdisc . ']';
 }
 
 sub show_brief {
@@ -71,12 +70,19 @@ sub show_brief {
 
     my @lines;
     my ( $qdisc, $parent, $ifname, $id );
+    my $root = 'root';
+
     while (<$tc>) {
         chomp;
         my @fields = split;
         if ( $fields[0] eq 'qdisc' ) {
+	    my ($ptype, $pid);
+	    # Examples:
             # qdisc sfq 8003: dev eth1 root limit 127p quantum 1514b
-            ( undef, $qdisc, $id, undef, $ifname, $parent ) = @fields;
+	    # qdisc gred 2: dev eth0 parent 1:
+            ( undef, $qdisc, $id, undef, $ifname, $ptype, $pid ) = @fields;
+
+	    $parent = ($ptype eq 'parent') ? $pid : $ptype;
             next;
         }
 
@@ -93,8 +99,11 @@ sub show_brief {
         if ( $id eq 'ffff:' ) {
             $ingress{$ifname} =
               [ $ifname, shaper($qdisc), $sent, $drop, $over ];
-        }
-        elsif ( $parent eq 'root' ) {
+        } elsif ( $qdisc eq 'dsmark' ) {
+	    # dsmark is used as a top-level before htb or gred
+	    $root = $id;
+	} elsif ( $parent eq $root ) {
+	    $root = 'root';
             if ($intf_type) {
                 my $intf = new Vyatta::Interface($ifname);
                 next unless ( $intf && ( $intf->type() eq $intf_type ) );
@@ -151,6 +160,7 @@ sub get_class {
       or die 'tc command failed: $!';
 
     my ( $id, $name, $sent, $drop, $over, $root, $leaf, $parent );
+
     while (<$tc>) {
         chomp;
         /^class/ && do {
@@ -188,7 +198,7 @@ sub get_class {
             my ( undef, $rate, undef, undef, undef, $backlog ) = split;
             $backlog =~ s/p$//;
             $rate    =~ s/bit$//;
-	    
+
 	    # split $id of form 1:10 into parent, child id
 	    my ($maj, $min) = ($id =~ m/([0-9a-f]+):([0-9a-f]+)/);
 
@@ -204,6 +214,7 @@ sub get_class {
             } else {
                 push @args, shaper($name), $sent, $drop, $over, $rate, $backlog;
             }
+
             $classes{$id} = {
                 id     => $id,
                 parent => $parent,
@@ -236,10 +247,12 @@ sub get_qdisc {
         chomp;
         /^qdisc/ && do {
             # qdisc htb 1: root r2q 10 default 20 direct_packets...
-            my $t;
+	    my $t;
+
             ( undef, $name, $qid, $t ) = split;
             $qid =~ s/:.*$//;
             $qid = hex($qid);
+
             $root = $qid if ( $t eq 'root' );
             next;
         };

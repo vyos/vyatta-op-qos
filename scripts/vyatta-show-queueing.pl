@@ -232,12 +232,19 @@ sub get_class {
         Tree::Simple->new( $root->{info}, Tree::Simple->ROOT ) );
 }
 
+sub qmajor {
+    my $id = shift;
+
+    $id =~ s/:.*$//;
+    return hex($id);
+}
+
 # This collects all the qdisc information into one hash
 # and root queue id and reference to map of qdisc to statistics
 sub get_qdisc {
     my $interface = shift;
     my %qdisc;
-    my $root;
+    my ($root, $dsmark);
 
     open( my $tc, "/sbin/tc -s qdisc show dev $interface |" )
       or die 'tc command failed: $!';
@@ -247,13 +254,19 @@ sub get_qdisc {
         chomp;
         /^qdisc/ && do {
             # qdisc htb 1: root r2q 10 default 20 direct_packets...
-	    my $t;
+	    my ($t, $pqid);
 
-            ( undef, $name, $qid, $t ) = split;
-            $qid =~ s/:.*$//;
-            $qid = hex($qid);
-
-            $root = $qid if ( $t eq 'root' );
+            ( undef, $name, $qid, $t, $pqid ) = split;
+	    $qid = qmajor($qid);
+	    
+	    if ( $name eq 'dsmark' ) {
+		$dsmark = $qid;
+	    } elsif ( $t eq 'parent' && defined($dsmark) 
+		      && qmajor($pqid) == $dsmark ) {
+		$root = $qid;
+	    } elsif ( $t eq 'root' ) {
+		$root = $qid;
+	    }
             next;
         };
 

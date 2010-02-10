@@ -1,0 +1,2 @@
+help: Show pppoe interface queueing information
+run: ${vyatta_sbindir}/vyatta-show-queueing.pl --type=pppoe

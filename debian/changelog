@@ -1,3 +1,15 @@
+vyatta-op-qos (0.12.9) unstable; urgency=low
+
+  * Add wireless interface support to QoS operational commands
+  * Use vyatta-interfaces to complete ethernet list
+  * Add QoS operational commands for PPPoE
+  * Ignore top-level dsmark class when displaying
+  * Ignore dsmark in output of show queuing
+  * Fix Qos display for PPPoE
+  * Fix typo in completion of show queueing pppoe
+
+ -- Stephen Hemminger <stephen.hemminger@vyatta.com>  Wed, 10 Feb 2010 16:44:58 -0800
+
 vyatta-op-qos (0.12.8) unstable; urgency=low
 
   * Show queueing for interfaces with no output queue

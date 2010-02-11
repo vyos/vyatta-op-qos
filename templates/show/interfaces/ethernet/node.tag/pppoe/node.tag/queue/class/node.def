@@ -1,2 +1,0 @@
-help: Show queue classes for a pppoe device
-run: ${vyatta_bindir}/vyatta-show-queue ppp$6 class

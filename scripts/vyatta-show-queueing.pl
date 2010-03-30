@@ -39,7 +39,7 @@ my $intf_type;
 my %qdisc_types = (
     'pfifo_fast' => 'default',
     'sfq'        => 'fair-queue',
-    'tbf'        => 'rate-limit',
+    'tbf'        => 'rate-control',
     'htb'        => 'traffic-shaper',
     'pfifo'      => 'drop-tail',
     'red'        => 'random-detect',
@@ -66,7 +66,8 @@ sub show_brief {
     printf $fmt, 'Interface', 'Qos-Policy', 'Sent', 'Dropped', 'Overlimit';
 
     # Read qdisc info
-    open( my $tc, '/sbin/tc -s qdisc ls |' ) or die 'tc command failed';
+    open( my $tc, '|-', '/sbin/tc -s qdisc ls' )
+	or die 'tc qdisc command failed';
 
     my @lines;
     my ( $qdisc, $parent, $ifname, $id );
@@ -156,8 +157,8 @@ sub get_class {
     my ( $interface, $rootq, $qdisc ) = @_;
     my %classes;
 
-    open( my $tc, "/sbin/tc -s class show dev $interface |" )
-      or die 'tc command failed: $!';
+    open( my $tc, '-|', "/sbin/tc -s class show dev $interface" )
+      or die 'tc class command failed: $!';
 
     my ( $id, $name, $sent, $drop, $over, $root, $leaf, $parent );
 
@@ -239,6 +240,43 @@ sub qmajor {
     return hex($id);
 }
 
+
+sub get_filter {
+    my $interface = shift;
+    my %qdisc;
+    my ($root, $rate);
+
+    open( my $tc, '-|', "/sbin/tc -s filter show dev $interface" )
+      or die 'tc class command failed: $!';
+
+    while (<$tc>) {
+	chomp;
+	/^filter/ && do {
+	    # filter parent 1: protocol all pref 20 u32 ...
+	    my (undef, undef, $qid) = split;
+	    $root = qmajor($qid);
+	};
+	/^ police/ && do {
+	    # police 0x3 rate 80000Kbit burst 16Kb
+	    (undef, undef, undef, $rate) = split;
+            $rate    =~ s/bit$//;
+	};
+        /^ Sent/ && do {
+            #  Sent 960 bytes 88 pkts (dropped 0, overlimits 0)
+            my ( undef, $sent, undef, undef, undef, undef,
+		 $drop, undef, $over ) = split;
+
+            $drop =~ s/,$//;
+	    $over =~ s/)$//;
+
+            $qdisc{$root} = [ 'traffic-limiter', $sent, $drop, $over, $rate, "" ];
+        };
+    }
+    return unless $rate;
+
+    return ( $root, \%qdisc );
+}
+
 # This collects all the qdisc information into one hash
 # and root queue id and reference to map of qdisc to statistics
 sub get_qdisc {
@@ -246,7 +284,7 @@ sub get_qdisc {
     my %qdisc;
     my ($root, $dsmark);
 
-    open( my $tc, "/sbin/tc -s qdisc show dev $interface |" )
+    open( my $tc, '-|', "/sbin/tc -s qdisc show dev $interface" )
       or die 'tc command failed: $!';
 
     my ( $qid, $name, $sent, $drop, $over );
@@ -258,10 +296,10 @@ sub get_qdisc {
 
             ( undef, $name, $qid, $t, $pqid ) = split;
 	    $qid = qmajor($qid);
-	    
+
 	    if ( $name eq 'dsmark' ) {
 		$dsmark = $qid;
-	    } elsif ( $t eq 'parent' && defined($dsmark) 
+	    } elsif ( $t eq 'parent' && defined($dsmark)
 		      && qmajor($pqid) == $dsmark ) {
 		$root = $qid;
 	    } elsif ( $t eq 'root' ) {
@@ -323,9 +361,15 @@ sub show_queues {
 
 sub show {
     my $interface = shift;
-    my ( $root, $qdisc ) = get_qdisc($interface);
+    my ( $root, $qdisc );
+
+    # Show output queue first
+    ( $root, $qdisc ) = get_filter($interface);
+    ( $root, $qdisc ) = get_qdisc($interface) unless $root;
 
     show_queues( $interface, $root,    $qdisc ) if $root;
+
+    # TODO handle ifb
     show_queues( $interface, $INGRESS, $qdisc );
 }
 

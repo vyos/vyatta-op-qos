@@ -66,7 +66,7 @@ sub show_brief {
     printf $fmt, 'Interface', 'Qos-Policy', 'Sent', 'Dropped', 'Overlimit';
 
     # Read qdisc info
-    open( my $tc, '|-', '/sbin/tc -s qdisc ls' )
+    open( my $tc, '-|', '/sbin/tc -s qdisc ls' )
 	or die 'tc qdisc command failed';
 
     my @lines;

@@ -13,11 +13,10 @@
 # General Public License for more details.
 #
 # This code was originally developed by Vyatta, Inc.
-# Portions created by Vyatta are Copyright (C) 2007 Vyatta, Inc.
+# Copyright (C) 2010 Vyatta, Inc.
 # All Rights Reserved.
 #
 # Author: Stephen Hemminger
-# Date: July 2008
 # Description: Script to display QoS information in pretty form
 #
 # **** End License ****
@@ -47,7 +46,7 @@ my %qdisc_types = (
     'drr'        => 'round-robin',
     'prio'       => 'priority-queue',
     'netem'      => 'network-emulator',
-    'gred'	 => 'weighted-random',
+    'gred'       => 'weighted-random',
 );
 
 # Convert from kernel to vyatta nams
@@ -67,7 +66,7 @@ sub show_brief {
 
     # Read qdisc info
     open( my $tc, '-|', '/sbin/tc -s qdisc ls' )
-	or die 'tc qdisc command failed';
+      or die 'tc qdisc command failed';
 
     my @lines;
     my ( $qdisc, $parent, $ifname, $id );
@@ -77,13 +76,14 @@ sub show_brief {
         chomp;
         my @fields = split;
         if ( $fields[0] eq 'qdisc' ) {
-	    my ($ptype, $pid);
-	    # Examples:
+            my ( $ptype, $pid );
+
+            # Examples:
             # qdisc sfq 8003: dev eth1 root limit 127p quantum 1514b
-	    # qdisc gred 2: dev eth0 parent 1:
+            # qdisc gred 2: dev eth0 parent 1:
             ( undef, $qdisc, $id, undef, $ifname, $ptype, $pid ) = @fields;
 
-	    $parent = ($ptype eq 'parent') ? $pid : $ptype;
+            $parent = ( $ptype eq 'parent' ) ? $pid : $ptype;
             next;
         }
 
@@ -100,17 +100,21 @@ sub show_brief {
         if ( $id eq 'ffff:' ) {
             $ingress{$ifname} =
               [ $ifname, shaper($qdisc), $sent, $drop, $over ];
-        } elsif ( $qdisc eq 'dsmark' ) {
-	    # dsmark is used as a top-level before htb or gred
-	    $root = $id;
-	} elsif ( $parent eq $root ) {
-	    $root = 'root';
+        }
+        elsif ( $qdisc eq 'dsmark' ) {
+
+            # dsmark is used as a top-level before htb or gred
+            $root = $id;
+        }
+        elsif ( $parent eq $root ) {
+            $root = 'root';
             if ($intf_type) {
                 my $intf = new Vyatta::Interface($ifname);
                 next unless ( $intf && ( $intf->type() eq $intf_type ) );
             }
 
-	    push @lines, sprintf $fmt, $ifname, shaper($qdisc), $sent, $drop, $over;
+            push @lines, sprintf $fmt, $ifname, shaper($qdisc), $sent, $drop,
+              $over;
         }
     }
     close $tc;
@@ -130,10 +134,10 @@ sub show_brief {
 # Sort by class id which is a string of form major:minor
 # NB: numbers are hex
 sub byclassid {
-    my ($a1, $a2) = ($a =~ m/([0-9a-f]+):([0-9a-f]+)/);
-    my ($b1, $b2) = ($b =~ m/([0-9a-f]+):([0-9a-f]+)/);
+    my ( $a1, $a2 ) = ( $a =~ m/([0-9a-f]+):([0-9a-f]+)/ );
+    my ( $b1, $b2 ) = ( $b =~ m/([0-9a-f]+):([0-9a-f]+)/ );
 
-    return hex($a2) <=> hex($b2) if ($a1 == $b1);
+    return hex($a2) <=> hex($b2) if ( $a1 == $b1 );
     return hex($a1) <=> hex($b1);
 }
 
@@ -144,7 +148,7 @@ sub class2tree {
         my $class = $classes->{$id};
         next unless ( $class->{parent} && $class->{parent} eq $parentid );
         my $node = Tree::Simple->new( $class->{info} );
-	$parent->addChild($node);
+        $parent->addChild($node);
         class2tree( $classes, $id, $node );
     }
 
@@ -165,26 +169,30 @@ sub get_class {
     while (<$tc>) {
         chomp;
         /^class/ && do {
-	    # class htb 1:1 root rate 1000Kbit ceil 1000Kbit burst 1600b cburst 1600b
-	    # class htb 1:2 parent 1:1 leaf 8001:
-	    # class ieee80211 :2 parent 8001:
+
+       # class htb 1:1 root rate 1000Kbit ceil 1000Kbit burst 1600b cburst 1600b
+       # class htb 1:2 parent 1:1 leaf 8001:
+       # class ieee80211 :2 parent 8001:
             my ( $l, $q, $t );
             ( undef, $name, $id, $t, $parent, $l, $q ) = split;
-	    $leaf = undef;
-	    if ($t eq 'root') {
-		$parent = undef;
-	    } elsif ($t eq 'parent') {
-		if ($l eq 'leaf') {
-		    $q =~ s/:$//;
-		    $leaf = hex($q);
-		}
-	    } else {
-		die "confused by tc class output for type 'class $name $id $t'";
-	    }
+            $leaf = undef;
+            if ( $t eq 'root' ) {
+                $parent = undef;
+            }
+            elsif ( $t eq 'parent' ) {
+                if ( $l eq 'leaf' ) {
+                    $q =~ s/:$//;
+                    $leaf = hex($q);
+                }
+            }
+            else {
+                die "confused by tc class output for type 'class $name $id $t'";
+            }
             next;
         };
 
         /^ Sent/ && do {
+
             #  Sent 13860 bytes 88 pkt (dropped 0, overlimits 0 requeues 0)
             ( undef, $sent, undef, undef, undef, undef, $drop, undef, $over ) =
               split;
@@ -195,24 +203,26 @@ sub get_class {
         };
 
         /^ rate/ && do {
+
             #  rate 0bit 0pps backlog 0b 23p requeues 0
             my ( undef, $rate, undef, undef, undef, $backlog ) = split;
             $backlog =~ s/p$//;
             $rate    =~ s/bit$//;
 
-	    # split $id of form 1:10 into parent, child id
-	    my ($maj, $min) = ($id =~ m/([0-9a-f]+):([0-9a-f]+)/);
+            # split $id of form 1:10 into parent, child id
+            my ( $maj, $min ) = ( $id =~ m/([0-9a-f]+):([0-9a-f]+)/ );
 
-	    # TODO handle nested classes??
-	    next if (hex($maj) != $rootq);
+            # TODO handle nested classes??
+            next if ( hex($maj) != $rootq );
 
-	    # record info for display
+            # record info for display
             my @args = ( hex($min) );
             if ($leaf) {
-		my $qdisc_info = $qdisc->{$leaf};
-		die "info for $leaf is unknown" unless $qdisc_info;
-                push @args, @{ $qdisc_info };
-            } else {
+                my $qdisc_info = $qdisc->{$leaf};
+                die "info for $leaf is unknown" unless $qdisc_info;
+                push @args, @{$qdisc_info};
+            }
+            else {
                 push @args, shaper($name), $sent, $drop, $over, $rate, $backlog;
             }
 
@@ -240,49 +250,12 @@ sub qmajor {
     return hex($id);
 }
 
-
-sub get_filter {
-    my $interface = shift;
-    my %qdisc;
-    my ($root, $rate);
-
-    open( my $tc, '-|', "/sbin/tc -s filter show dev $interface" )
-      or die 'tc class command failed: $!';
-
-    while (<$tc>) {
-	chomp;
-	/^filter/ && do {
-	    # filter parent 1: protocol all pref 20 u32 ...
-	    my (undef, undef, $qid) = split;
-	    $root = qmajor($qid);
-	};
-	/^ police/ && do {
-	    # police 0x3 rate 80000Kbit burst 16Kb
-	    (undef, undef, undef, $rate) = split;
-            $rate    =~ s/bit$//;
-	};
-        /^ Sent/ && do {
-            #  Sent 960 bytes 88 pkts (dropped 0, overlimits 0)
-            my ( undef, $sent, undef, undef, undef, undef,
-		 $drop, undef, $over ) = split;
-
-            $drop =~ s/,$//;
-	    $over =~ s/)$//;
-
-            $qdisc{$root} = [ 'traffic-limiter', $sent, $drop, $over, $rate, "" ];
-        };
-    }
-    return unless $rate;
-
-    return ( $root, \%qdisc );
-}
-
 # This collects all the qdisc information into one hash
 # and root queue id and reference to map of qdisc to statistics
 sub get_qdisc {
     my $interface = shift;
     my %qdisc;
-    my ($root, $dsmark);
+    my ( $root, $dsmark );
 
     open( my $tc, '-|', "/sbin/tc -s qdisc show dev $interface" )
       or die 'tc command failed: $!';
@@ -291,24 +264,30 @@ sub get_qdisc {
     while (<$tc>) {
         chomp;
         /^qdisc/ && do {
+
             # qdisc htb 1: root r2q 10 default 20 direct_packets...
-	    my ($t, $pqid);
+            my ( $t, $pqid );
 
             ( undef, $name, $qid, $t, $pqid ) = split;
-	    $qid = qmajor($qid);
+            $qid = qmajor($qid);
 
-	    if ( $name eq 'dsmark' ) {
-		$dsmark = $qid;
-	    } elsif ( $t eq 'parent' && defined($dsmark)
-		      && qmajor($pqid) == $dsmark ) {
-		$root = $qid;
-	    } elsif ( $t eq 'root' ) {
-		$root = $qid;
-	    }
+            if ( $name eq 'dsmark' ) {
+                $dsmark = $qid;
+            }
+            elsif ($t eq 'parent'
+                && defined($dsmark)
+                && qmajor($pqid) == $dsmark )
+            {
+                $root = $qid;
+            }
+            elsif ( $t eq 'root' ) {
+                $root = $qid;
+            }
             next;
         };
 
         /^ Sent/ && do {
+
             #  Sent 13860 bytes 88 pkt (dropped 0, overlimits 0 requeues 0)
             ( undef, $sent, undef, undef, undef, undef, $drop, undef, $over ) =
               split;
@@ -319,13 +298,15 @@ sub get_qdisc {
         };
 
         /^ rate/ && do {
+
             # rate 0bit 0pps backlog 0b 23p requeues 0
             my ( undef, $rate, undef, undef, undef, $backlog ) = split;
 
             $backlog =~ s/p$//;
             $rate    =~ s/bit$//;
 
-            $qdisc{$qid} = [ shaper($name), $sent, $drop, $over, $rate, $backlog ];
+            $qdisc{$qid} =
+              [ shaper($name), $sent, $drop, $over, $rate, $backlog ];
           }
     }
     close $tc;
@@ -333,18 +314,14 @@ sub get_qdisc {
     return ( $root, \%qdisc );
 }
 
-my $INGRESS = 0xffff;
-
 sub show_queues {
     my ( $interface, $root, $qdisc ) = @_;
     my $args = $qdisc->{$root};
     return unless $args;
 
-    my $fmt     = "%-10s %-16s %-10s %-9s %-9s %-9s %s\n";
-    print "\n$interface ", ( ( $root eq $INGRESS ) ? 'Input' : 'Output' ),
-      " Queueing:\n";
-    printf $fmt, 'Class', 'Qos-Policy',
-      ( ( $root eq $INGRESS ) ? 'Received' : 'Sent' ),
+    my $fmt = "%-10s %-16s %-10s %-9s %-9s %-9s %s\n";
+    print "\n$interface Queueing:\n";
+    printf $fmt, 'Class', 'Qos-Policy', 'Sent',
       'Dropped', 'Overlimit', 'Rate', 'Queued';
 
     printf $fmt, 'root', @{$args};
@@ -352,11 +329,14 @@ sub show_queues {
     my $tree = get_class( $interface, $root, $qdisc );
     return unless $tree;
 
-    $tree->traverse( sub { my $_tree = shift;
-			   my @args = @{ $_tree->getNodeValue() };
-			   my $id = shift @args;
-			   printf $fmt, ('  ' x $_tree->getDepth() . $id ), @args;
-		     });
+    $tree->traverse(
+        sub {
+            my $_tree = shift;
+            my @args  = @{ $_tree->getNodeValue() };
+            my $id    = shift @args;
+            printf $fmt, ( '  ' x $_tree->getDepth() . $id ), @args;
+        }
+    );
 }
 
 sub show {
@@ -364,13 +344,9 @@ sub show {
     my ( $root, $qdisc );
 
     # Show output queue first
-    ( $root, $qdisc ) = get_filter($interface);
     ( $root, $qdisc ) = get_qdisc($interface) unless $root;
 
-    show_queues( $interface, $root,    $qdisc ) if $root;
-
-    # TODO handle ifb
-    show_queues( $interface, $INGRESS, $qdisc );
+    show_queues( $interface, $root, $qdisc ) if $root;
 }
 
 sub usage {

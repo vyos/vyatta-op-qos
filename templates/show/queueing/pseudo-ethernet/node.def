@@ -1,0 +1,2 @@
+help: Show tunnel queueing information
+run: ${vyatta_bindir}/vyatta-show-queueing.pl --type=pseudo-ethernet

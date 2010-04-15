@@ -42,7 +42,6 @@ my %qdisc_types = (
     'htb'        => 'traffic-shaper',
     'pfifo'      => 'drop-tail',
     'red'        => 'random-detect',
-    'ingress'    => 'traffic-limiter',
     'drr'        => 'round-robin',
     'prio'       => 'priority-queue',
     'netem'      => 'network-emulator',
@@ -58,9 +57,6 @@ sub shaper {
 }
 
 sub show_brief {
-    my %ingress;
-
-    print "Output Queues:\n";
     my $fmt = "%-10s %-16s %10s %10s %10s\n";
     printf $fmt, 'Interface', 'Qos-Policy', 'Sent', 'Dropped', 'Overlimit';
 
@@ -97,12 +93,7 @@ sub show_brief {
         # punctuation was never jamal's strong suit
         $drop =~ s/,$//;
 
-        if ( $id eq 'ffff:' ) {
-            $ingress{$ifname} =
-              [ $ifname, shaper($qdisc), $sent, $drop, $over ];
-        }
-        elsif ( $qdisc eq 'dsmark' ) {
-
+        if ( $qdisc eq 'dsmark' ) {
             # dsmark is used as a top-level before htb or gred
             $root = $id;
         }
@@ -119,16 +110,6 @@ sub show_brief {
     }
     close $tc;
     print sort @lines;
-
-    if (%ingress) {
-        print "\nInput:\n";
-        printf $fmt, 'Ifname', 'Qos-Policy', 'Received', 'Dropped', 'Overlimit';
-
-        foreach my $name ( keys %ingress ) {
-            my $args = $ingress{$name};
-            printf $fmt, @$args;
-        }
-    }
 }
 
 # Sort by class id which is a string of form major:minor

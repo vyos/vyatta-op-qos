@@ -1,0 +1,2 @@
+help: Show tunnel input-policy information
+run: ${vyatta_bindir}/show-input-policy.pl --type=pseudo-ethernet

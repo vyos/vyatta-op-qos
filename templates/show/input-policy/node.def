@@ -1,0 +1,2 @@
+help: Show ethernet input-policy information
+run: ${vyatta_bindir}/show-input-policy.pl --brief

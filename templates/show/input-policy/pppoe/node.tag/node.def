@@ -1,0 +1,3 @@
+help: Show specified pppoe interface information
+allowed: ${vyatta_sbindir}/vyatta-interfaces.pl --show=pppoe
+run: ${vyatta_bindir}/show-input-policy.pl "$4"

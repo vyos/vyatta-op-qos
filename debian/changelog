@@ -1,3 +1,15 @@
+vyatta-op-qos (0.12.11) unstable; urgency=low
+
+  * Handle traffic-limiter better
+  * fix typo in 3 arg conversion
+  * Add templates for input interfaces
+  * Change queuing script to corespond to input interface changes
+  * Remove ingress from show queueing
+  * Add queuing operational mode commands for more interface types
+  * Add operational mode command for input-policy
+
+ -- Stephen Hemminger <stephen.hemminger@vyatta.com>  Thu, 15 Apr 2010 17:40:02 -0700
+
 vyatta-op-qos (0.12.10) unstable; urgency=low
 
   * UNRELEASED

@@ -13,12 +13,11 @@
 # General Public License for more details.
 #
 # This code was originally developed by Vyatta, Inc.
-# Portions created by Vyatta are Copyright (C) 2007 Vyatta, Inc.
+# Copyright (C) 2010 Vyatta, Inc.
 # All Rights Reserved.
 #
 # Author: Stephen Hemminger
-# Date: July 2008
-# Description: Script to display QoS information in pretty form
+# Description: Script to display input filter information in pretty form
 #
 # **** End License ****
 #
@@ -112,14 +111,16 @@ sub get_filter {
 sub show {
     my $interface = shift;
     my $filters = get_filter($interface);
-    return unless $filters;
+
+    my @classes = keys %{$filters};
+    return if $#classes < 0;		# no ingress
 
     print "\n$interface input:\n";
 
     my $fmt     = "%-10s %-10s %-10s %-9s %-9s %s\n";
     printf $fmt, 'Class', 'Policy', 'Received', 'Dropped', 'Overlimit', 'Rate';
 
-    foreach my $id (sort keys %{$filters}) {
+    foreach my $id (sort @classes) {
 	my @args = @{$filters->{$id}};
 	my $class = ($id eq $INGRESS) ? 'default' : $id;
 	my $rate = pop @args;

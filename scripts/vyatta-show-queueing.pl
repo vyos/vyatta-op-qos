@@ -39,13 +39,14 @@ my %qdisc_types = (
     'pfifo_fast' => 'default',
     'sfq'        => 'fair-queue',
     'tbf'        => 'rate-control',
-    'htb'        => 'traffic-shaper',
+    'htb'        => 'shaper',
     'pfifo'      => 'drop-tail',
     'red'        => 'random-detect',
     'drr'        => 'round-robin',
     'prio'       => 'priority-queue',
     'netem'      => 'network-emulator',
     'gred'       => 'weighted-random',
+    'prio'       => 'limiter',  # XXX may be more in future
 );
 
 # Convert from kernel to vyatta nams
@@ -58,7 +59,7 @@ sub shaper {
 
 sub show_brief {
     my $fmt = "%-10s %-16s %10s %10s %10s\n";
-    printf $fmt, 'Interface', 'Qos-Policy', 'Sent', 'Dropped', 'Overlimit';
+    printf $fmt, 'Interface', 'Policy', 'Sent', 'Dropped', 'Overlimit';
 
     # Read qdisc info
     open( my $tc, '-|', '/sbin/tc -s qdisc ls' )

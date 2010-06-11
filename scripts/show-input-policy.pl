@@ -134,7 +134,7 @@ sub show_brief {
     my @interfaces = ingress_interface();
 
     my $fmt     = "%-10s %-10s %-10s %-9s %-9s\n";
-    printf $fmt, 'Interface', 'Policy', 'Received', 'Dropped', 'Overlimit';
+    printf $fmt, 'Interface', 'Action', 'Received', 'Dropped', 'Overlimit';
 
     foreach my $intf (sort @interfaces) {
 	my $filters = get_filter($intf);

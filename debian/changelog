@@ -1,3 +1,9 @@
+vyatta-op-qos (0.12.14) unstable; urgency=low
+
+  * Fix use of unitialized variable if ingress has no filter
+
+ -- Stephen Hemminger <stephen.hemminger@vyatta.com>  Tue, 20 Jul 2010 16:06:24 -0700
+
 vyatta-op-qos (0.12.13) unstable; urgency=low
 
   * Change column headings

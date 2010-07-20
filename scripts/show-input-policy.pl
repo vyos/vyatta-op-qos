@@ -138,7 +138,7 @@ sub show_brief {
 
     foreach my $intf (sort @interfaces) {
 	my $filters = get_filter($intf);
-	my $policy;
+	my $policy = "none";
 	my $receive = 0;
 	my $dropped = 0;
 	my $overlimit = 0;

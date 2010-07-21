@@ -58,15 +58,25 @@ sub qminor {
     return hex($1) if ( $id =~ /:(.*)$/ );
 }
 
+# expects
+# filter protocol all pref 20 basic ... flowid ffff:2 ...
+# returns "ffff:2"
+sub get_flow {
+    return unless $#_ > 6;
+    for (my $i = 5; $i < $#_; $i++) {
+	return $_[$i + 1] if ($_[$i] eq 'flowid');
+    }
+    return;
+}
+
 sub get_filter {
     my ($interface) = @_;
 
     open( my $tc, '-|',
-	  "/sbin/tc -s -s filter show dev $interface parent ffff:" )
+	  "/sbin/tc -s filter show dev $interface parent ffff:" )
       or die 'tc filter command failed: $!';
 
-    my $id = $INGRESS;
-    my ($rate, $policy);
+    my ($id, $rate, $action, $sent, $drop, $over);
     my %filters;
 
     while (<$tc>) {
@@ -75,35 +85,38 @@ sub get_filter {
 	    # filter protocol all pref 20 u32
 	    # filter protocol all pref 20 u32 fh 800: ht divisor 1
 	    # filter protocol all pref 20 u32 fh 800::800 order 2048 ... flowid ffff:2
-	    my @field = split;
-	    next unless $#field >= 16 && $field[15] eq 'flowid';
-	    $id = qminor($field[16]);
+	    my @filter = split;
+	    my $flow = get_flow(@filter);
+	    next unless $flow;
+
+	    $filters{$id} = [ $action, $sent, $drop, $over, $rate ] if $id;
+	    $id = qminor($flow);
+
+	    # workaround lack of stats for some filters
+	    $sent = 0;
+	    $drop = 0;
+	    $over = 0;
 	};
 	/^\s+police/ && do {
 	    # police 0x3 rate 80000Kbit burst 16Kb
 	    (undef, undef, undef, $rate) = split;
             $rate    =~ s/bit$//;
-	    $policy = 'limit';
+	    $action = 'limit';
 	};
 	/^\s+action/ && do {
 	    # 	action order 1: mirred (Egress Redirect to device ifb0) stolen
-	    my (undef, undef, undef, undef, undef, $action)  = split;
-	    $policy = lc($action);
+	    my (undef, undef, undef, undef, undef, $a)  = split;
+	    $action = lc($a);
 	};
         /^\s+Sent/ && do {
             #  Sent 960 bytes 88 pkts (dropped 0, overlimits 0)
-            my ( undef, $sent, undef, undef, undef, undef,
-		 $drop, undef, $over ) = split;
-
+            ( undef, $sent, undef, undef, undef, undef, $drop, undef, $over ) = split;
             $drop =~ s/,$//;
 	    $over =~ s/\)$//;
-
-            $filters{$id} = [ $policy, $sent, $drop, $over, $rate, ];
-	    $id = $INGRESS;
-	    $policy = undef;
-	    $rate = undef;
         };
     }
+
+    $filters{$id} = [ $action, $sent, $drop, $over, $rate ] if $id;
 
     return \%filters;
 }
@@ -118,7 +131,7 @@ sub show {
     print "\n$interface input:\n";
 
     my $fmt     = "%-10s %-10s %-10s %-9s %-9s %s\n";
-    printf $fmt, 'Class', 'Policy', 'Received', 'Dropped', 'Overlimit', 'Rate';
+    printf $fmt, 'Class', 'Action', 'Received', 'Dropped', 'Overlimit', 'Rate';
 
     foreach my $id (sort @classes) {
 	my @args = @{$filters->{$id}};
@@ -138,19 +151,19 @@ sub show_brief {
 
     foreach my $intf (sort @interfaces) {
 	my $filters = get_filter($intf);
-	my $policy = "none";
+	my $action = "none";
 	my $receive = 0;
 	my $dropped = 0;
 	my $overlimit = 0;
 
 	foreach my $id (keys %{$filters}) {
 	    my @args = @{$filters->{$id}};
-	    $policy = $args[0];
+	    $action = $args[0];
 	    $receive += $args[1];
 	    $dropped += $args[2];
 	    $overlimit += $args[3];
 	}
-	printf $fmt, $intf, $policy, $receive, $dropped, $overlimit;
+	printf $fmt, $intf, $action, $receive, $dropped, $overlimit;
     }
     exit 0;
 }

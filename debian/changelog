@@ -1,3 +1,9 @@
+vyatta-op-qos (0.12.15) unstable; urgency=low
+
+  * Fix show queuing when using traffic limiter
+
+ -- Stephen Hemminger <stephen.hemminger@vyatta.com>  Wed, 21 Jul 2010 15:17:32 -0700
+
 vyatta-op-qos (0.12.14) unstable; urgency=low
 
   * Fix use of unitialized variable if ingress has no filter

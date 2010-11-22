@@ -11,4 +11,5 @@ config
 configure
 debian/files
 debian/vyatta-op-qos
-debian/vyatta-op-qos.debhelper.log
+debian/*.debhelper.log
+debian/*.substvars

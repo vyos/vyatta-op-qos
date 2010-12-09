@@ -1,3 +1,11 @@
+vyatta-op-qos (0.12.18) unstable; urgency=low
+
+  * Remove linda override
+  * make script executable
+  * Fix show queueing on interface
+
+ -- Stephen Hemminger <stephen.hemminger@vyatta.com>  Wed, 08 Dec 2010 19:38:45 -0800
+
 vyatta-op-qos (0.12.17) unstable; urgency=low
 
   * UNRELEASED

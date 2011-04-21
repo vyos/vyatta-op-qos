@@ -307,7 +307,7 @@ sub print_info {
     for (@fields) {
 	my $val = $info->{$_};
 	if (defined($val)) {
-	    printf " %8d", $val;
+	    printf ' %8s', $val;
 	} else {
 	    print '         ';
 	}

@@ -1,3 +1,9 @@
+vyatta-op-qos (0.12.21) unstable; urgency=low
+
+  *  Bugfix 7285: remove coloring of error
+
+ -- John Southworth <john.southworth@vyatta.com>  Wed, 06 Jul 2011 16:09:33 -0500
+
 vyatta-op-qos (0.12.20) unstable; urgency=low
 
   * Fix error in show queuing at higher rates

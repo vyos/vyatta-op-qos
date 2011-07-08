@@ -1,3 +1,9 @@
+vyatta-op-qos (0.12.21+napa1) unstable; urgency=low
+
+  * new branch
+
+ -- Deepti Kulkarni <deepti@vyatta.com>  Thu, 07 Jul 2011 20:50:05 -0700
+
 vyatta-op-qos (0.12.21) unstable; urgency=low
 
   *  Bugfix 7285: remove coloring of error

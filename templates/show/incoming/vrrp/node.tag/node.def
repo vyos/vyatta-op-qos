@@ -1,0 +1,3 @@
+help: Show specified ethernet interface information
+allowed: ${vyatta_sbindir}/vyatta-interfaces.pl --show=vrrp
+run: ${vyatta_bindir}/show-input-policy.pl "$4"

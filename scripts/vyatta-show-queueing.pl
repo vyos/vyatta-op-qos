@@ -46,7 +46,8 @@ my %qdisc_types = (
     'prio'       => 'priority-queue',
     'netem'      => 'network-emulator',
     'gred'       => 'weighted-random',
-    'prio'       => 'limiter',  # XXX may be more in future
+    'prio'       => 'priority-queue',
+    'ingress'	 => 'limiter',
 );
 
 # Convert from kernel to vyatta nams

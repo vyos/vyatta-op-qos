@@ -1,3 +1,9 @@
+vyatta-op-qos (0.12.26) unstable; urgency=low
+
+  * Bugfix 8217: VTI: add show queueing and incoming commands.
+
+ -- Saurabh Mohan <saurabh@vyatta.com>  Thu, 09 Aug 2012 13:21:48 -0700
+
 vyatta-op-qos (0.12.25) unstable; urgency=low
 
   * Show priority (versus limiter) correctly

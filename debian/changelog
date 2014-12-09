@@ -1,3 +1,9 @@
+vyatta-op-qos (0.12.27+vyos2+lithium1) unstable; urgency=low
+
+  * New branch
+
+ -- Alex Harpin <development@landsofshadow.co.uk>  Tue, 09 Dec 2014 22:11:39 +0000
+ 
 vyatta-op-qos (0.12.27+vyos1+helium1) unstable; urgency=low
 
   * New branch

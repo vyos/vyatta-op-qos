@@ -120,6 +120,12 @@ sub byclassid {
     my ( $a1, $a2 ) = ( $a =~ m/([0-9a-f]+):([0-9a-f]+)/ );
     my ( $b1, $b2 ) = ( $b =~ m/([0-9a-f]+):([0-9a-f]+)/ );
 
+    # Gracefully handle 'X:' classes
+    if(!defined $a1) { $a1 = '0'; }
+    if(!defined $a2) { $a2 = '0'; }
+    if(!defined $b1) { $b1 = '0'; }
+    if(!defined $b2) { $b2 = '0'; }
+
     if ($a1 eq $b1) {
 	return hex($a2) <=> hex($b2);
     } else {
@@ -339,6 +345,9 @@ sub show_queues {
 	    my $class = $node->getNodeValue();
 	    my $qid = qminor($class->{id});
 	    $qid = 'default' if (defined($default) && $qid == $default);
+
+            # Return if said class has no leaf queue
+            return unless defined($class->{leaf}) && defined($qdisc->[$class->{leaf}]);
 
 	    my $subq = $qdisc->[$class->{leaf}];
 

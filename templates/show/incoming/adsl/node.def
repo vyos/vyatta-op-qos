@@ -1,2 +1,0 @@
-help: Show adsl input-policy information
-run: ${vyatta_bindir}/show-input-policy.pl --type=adsl

@@ -1,3 +1,10 @@
+vyatta-op-qos (0.12.27+vyos2+lithium3) unstable; urgency=low
+
+  * Bug #439: remove QoS op mode commands for interface types that are
+    no longer supported.
+
+ -- Daniil Baturin <daniil@baturin.org>  Sat, 24 Jan 2015 12:58:08 +0100
+
 vyatta-op-qos (0.12.27+vyos2+lithium2) unstable; urgency=low
 
   * Update maintainer address

@@ -1,3 +1,12 @@
+vyatta-op-qos (0.12.27+vyos2+lithium4) unstable; urgency=low
+
+  [ Benjamin Beret ]
+  * "show queuing" update for HFSC scheduler (#428) 
+
+  [ Alex Harpin ]
+  
+ -- Alex Harpin <development@landsofshadow.co.uk>  Mon, 09 Feb 2015 21:22:16 +0000
+ 
 vyatta-op-qos (0.12.27+vyos2+lithium3) unstable; urgency=low
 
   * Bug #439: remove QoS op mode commands for interface types that are

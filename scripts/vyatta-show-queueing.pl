@@ -37,6 +37,7 @@ my $intf_type;
 # Map from kernel qdisc names to configuration names
 my %qdisc_types = (
     'pfifo_fast' => 'default',
+    'fq_codel'   => 'fq-codel',
     'sfq'        => 'fair-queue',
     'tbf'        => 'rate-control',
     'htb'        => 'shaper',
@@ -46,8 +47,7 @@ my %qdisc_types = (
     'prio'       => 'priority-queue',
     'netem'      => 'network-emulator',
     'gred'       => 'weighted-random',
-    'prio'       => 'priority-queue',
-    'ingress'	 => 'limiter',
+    'ingress'    => 'limiter',
 );
 
 # Convert from kernel to vyatta nams
@@ -59,7 +59,7 @@ sub shaper {
 }
 
 sub show_brief {
-    my $fmt = "%-10s %-16s %10s %10s %10s\n";
+    my $fmt = "%-10s %-16s %12s %12s %12s\n";
     printf $fmt, 'Interface', 'Policy', 'Sent', 'Dropped', 'Overlimit';
 
     # Read qdisc info
@@ -114,106 +114,6 @@ sub show_brief {
     print sort @lines;
 }
 
-# Sort by class id which is a string of form major:minor
-# NB: numbers are hex
-sub byclassid {
-    my ( $a1, $a2 ) = ( $a =~ m/([0-9a-f]+):([0-9a-f]+)/ );
-    my ( $b1, $b2 ) = ( $b =~ m/([0-9a-f]+):([0-9a-f]+)/ );
-
-    # Gracefully handle 'X:' classes
-    if(!defined $a1) { $a1 = '0'; }
-    if(!defined $a2) { $a2 = '0'; }
-    if(!defined $b1) { $b1 = '0'; }
-    if(!defined $b2) { $b2 = '0'; }
-
-    if ($a1 eq $b1) {
-	return hex($a2) <=> hex($b2);
-    } else {
-	return hex($a1) <=> hex($b1);
-    }
-}
-
-# Recursively add classes to parent tree
-sub class2tree {
-    my ( $classes, $parent_id, $parent_tree ) = @_;
-
-    foreach my $id ( sort byclassid keys %{$classes} ) {
-        my $class = $classes->{$id};
-        next unless ( $class->{parent} && $class->{parent} eq $parent_id );
-
-        my $node = Tree::Simple->new( $class );
-        $parent_tree->addChild($node);
-
-        class2tree( $classes, $id, $node );
-    }
-}
-
-# Build a tree of output information
-# (This is N^2 but not a big issue)
-sub get_class {
-    my ( $interface, $rootq ) = @_;
-    my %classes;
-
-    open( my $tc, '-|', "/sbin/tc -s class show dev $interface" )
-      or die 'tc class command failed: $!';
-
-    my ($id, $info, $root);
-    while (<$tc>) {
-        chomp;
-        /^class \S+ (\S+) / && do {
-	    # class htb 1:1 root rate 1000Kbit ceil 1000Kbit burst 1600b cburst 1600b
-	    # class htb 1:2 parent 1:1 leaf 8001:
-	    # class ieee80211 :2 parent 8001:
-
-	    # record last data, and clean slate
-	    $classes{$id} = $info if $id;
-
-	    $info = {};
-	    $id = $1;
-	    $info->{id} = $id;
-
-	    if (/ root / ) {
-		$root = $id;
-            } else {
-		/ parent (\S+)/ && do {
-		    $info->{parent} = $1;
-		};
-
-		/ leaf ([0-9a-f]+):/ && do {
-                    $info->{leaf} = hex($1);
-                };
-            }
-            next;
-        };
-
-        /^ Sent (\d+) bytes (\d+) pkt/ && do {
-	    $info->{sent} = $1;
-	};
-
-	/ \(dropped (\d+), overlimits (\d+) requeues (\d+)\) / && do {
-	    $info->{dropped} = $1;
-	    $info->{overlimit} = $2;
-	    $info->{requeues} = $3;
-        };
-
-	/ rate (\S+)bit (\d+)pps / && do {
-	    $info->{rate} = $1;
-	    $info->{pps} = $2;
-	};
-
-	/ backlog \d+b (\d+)p / && do {
-	    $info->{backlog} = $1;
-	};
-    }
-    close $tc;
-    $classes{$id} = $info if $id;
-    return unless $root;
-
-    my $tree = Tree::Simple->new( $classes{$root}, Tree::Simple->ROOT );
-    class2tree( \%classes, $root, $tree );
-    return $tree;
-}
-
 sub qmajor {
     my $id = shift;
 
@@ -229,11 +129,11 @@ sub qminor {
 }
 
 # This collects all the qdisc information into one hash
-# and root queue id and reference to map of qdisc to statistics
+# reference to map of qdisc class to statistics
 sub get_qdisc {
     my $interface = shift;
-    my @qdisc;
-    my ( $root, $dsmark );
+    my %qdisc;
+    my $default = undef;
 
     open( my $tc, '-|', "/sbin/tc -s qdisc show dev $interface" )
       or die 'tc command failed: $!';
@@ -243,127 +143,102 @@ sub get_qdisc {
     while (<$tc>) {
         chomp;
 
-	# qdisc htb 1: root r2q 10 default 20 direct_packets...
-	# qdisc pfifo 8008: parent 1:2 limit 1000p
+        # qdisc htb 1: root r2q 10 default 20 direct_packets...
+        # qdisc pfifo 8008: parent 1:2 limit 1000p
+        # qdisc fq_codel 8001: root refcnt 2 limit 10240p flows 1024 quantum 1514 target 5.0ms interval 100.0ms
         /^qdisc (\S+) ([0-9a-f]+): / && do {
-	    # record last qdisc
-	    $qdisc[$qid] = $qinfo if ($qid);
-	    $qinfo = {};
+            # record last qdisc
+            $qdisc{$qid} = $qinfo if (defined($qid));
+            $qinfo = {};
+            $qid   = 0;
+            $qinfo->{name} = shaper($1);
 
-	    my $name = $1;
-	    $qid = hex($2);
+            if (/ root /) {
+                $qinfo->{qidname} = 'root';
+            } elsif ( / parent (\S+)/ ) {
+                my $parent = qminor($1);
+                $qid = $parent;
+                if (defined($default) && ($parent == $default)) {
+                    $qinfo->{qidname} = 'default';
+                } else {
+                    $qinfo->{qidname} = qminor($1);
+                }
+            };
 
-	    $qinfo->{name} = shaper($name);
-	    $dsmark = $qid  if ($name eq 'dsmark');
-
-	    if (/ root /) {
-		$root = $qid;
-	    } elsif ( / parent (\S+)/ ) {
-		my $pqid = $1;
-
-		# hide dsmark qdisc from display
-		if (defined($dsmark) && qmajor($pqid) == $dsmark) {
-		    $root = $qid;
-		} else {
-		    $qinfo->{parent} = $pqid;
-		}
-            }
-
-	    if (/ default ([0-9a-f]+) / ) {
-		$qinfo->{default} = hex($1);
-	    }
+            if (/ default ([0-9a-f]+) / ) {
+                $default = hex($1);
+            };
 
             next;
         };
 
         /^ Sent (\d+) bytes (\d+) pkt/ && do {
-	    $qinfo->{sent} = $1;
-	};
-
-	/ \(dropped (\d+), overlimits (\d+) requeues (\d+)\) / && do {
-	    $qinfo->{dropped} = $1;
-	    $qinfo->{overlimit} = $2;
-	    $qinfo->{requeues} = $3;
+            $qinfo->{sent} = $1;
         };
 
-	/ rate (\S+)bit (\d+)pps / && do {
-	    $qinfo->{rate} = $1;
-	    $qinfo->{pps} = $2;
-	};
+        / \(dropped (\d+), overlimits (\d+) requeues (\d+)\) / && do {
+            $qinfo->{dropped} = $1;
+            $qinfo->{overlimit} = $2;
+            $qinfo->{requeues} = $3;
+        };
 
-	/ backlog \d+b (\d+)p / && do {
-	    $qinfo->{backlog} = $1;
-	}
+        / rate (\S+)bit (\d+)pps / && do {
+            $qinfo->{rate} = $1;
+            $qinfo->{pps} = $2;
+        };
+
+        / backlog \d+b (\d+)p / && do {
+            $qinfo->{backlog} = $1;
+        }
     }
     close $tc;
-    $qdisc[$qid] = $qinfo if $qid;
+    $qdisc{$qid} = $qinfo if (defined($qid));
 
-    return ( $root, \@qdisc );
+    return \%qdisc;
 }
 
 my $CLASSFMT = "%-10s %-16s";
-my @fields = qw(sent rate dropped overlimit backlog);
+my @fields = qw(sent dropped overlimit backlog);
 
 sub print_info {
-    my ($id, $name, $info, $depth) = @_;
-    my $indent = '  ' x $depth;
+    my $qinfo = shift;
+    my $id   = $qinfo->{qidname};
+    my $name = $qinfo->{name};
 
     # Class Policy
-    printf $CLASSFMT, $indent . $id, $name;
+    printf $CLASSFMT, $id, $name;
 
     for (@fields) {
-	my $val = $info->{$_};
-	if (defined($val)) {
-	    printf ' %8s', $val;
-	} else {
-	    print '         ';
-	}
+        my $qval = $qinfo->{$_};
+        if (defined($qval)) {
+            printf ' %12s', $qval;
+        } else {
+            print '             ';
+        }
     }
     print "\n";
 }
 
 sub show_queues {
-    my ( $interface, $qdisc, $root ) = @_;
-    my $rootq = $qdisc->[$root];
-    my $default = $rootq->{default};
+    my ( $interface, $qdisc ) = @_;
 
     print "\n$interface Queueing:\n";
     printf $CLASSFMT, 'Class', 'Policy';
     for (@fields) {
-	printf " %8s", ucfirst($_);
+        printf " %12s", ucfirst($_);
     }
     print "\n";
 
-    print_info('root', $rootq->{name}, $rootq, 0);
-
-    my $tree = get_class( $interface, $root );
-    return unless $tree;
-
-    $tree->traverse(
-        sub {
-	    my $node = shift;
-	    my $class = $node->getNodeValue();
-	    my $qid = qminor($class->{id});
-	    $qid = 'default' if (defined($default) && $qid == $default);
-
-            # Return if said class has no leaf queue
-            return unless defined($class->{leaf}) && defined($qdisc->[$class->{leaf}]);
-
-	    my $subq = $qdisc->[$class->{leaf}];
-
-	    print_info($qid, $subq->{name}, $class, $node->getDepth());
-        }
-    );
+    foreach my $qid ( sort {$a <=> $b} keys %{$qdisc} ) {
+        my $qinfo = $qdisc->{$qid};
+        print_info($qinfo);
+    }
 }
 
 sub show {
     my $interface = shift;
-    my ( $root, $qdisc );
-
-    # Show output queue first
-    ( $root, $qdisc ) = get_qdisc($interface) unless $root;
-
-    show_queues( $interface, $qdisc, $root ) if $root;
+    my $qdisc = get_qdisc($interface);
+    show_queues($interface, $qdisc);
 }
 
 sub usage {

@@ -1,3 +1,12 @@
+vyatta-op-qos (0.12.27+vyos2+lithium5) unstable; urgency=low
+
+  [ Carl Byington ]
+  * wider columns for large byte counts 
+
+  [ Alex Harpin ]
+  
+ -- Alex Harpin <development@landsofshadow.co.uk>  Sat, 13 Jun 2015 10:57:46 +0100
+  
 vyatta-op-qos (0.12.27+vyos2+lithium4) unstable; urgency=low
 
   [ Benjamin Beret ]

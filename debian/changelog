@@ -1,3 +1,12 @@
+vyatta-op-qos (0.12.27+vyos2+current1) unstable; urgency=medium
+
+  [ Thomas Jepp ]
+  * Fix build depends.
+
+  [ Kim Hagen ]
+
+ -- Kim Hagen <kim.sidney@gmail.com>  Sun, 24 Jan 2016 15:21:17 -0500
+
 vyatta-op-qos (0.12.27+vyos2+lithium6) unstable; urgency=low
 
   * vyatta-op-qos: update dh_gencontrol with new development build flag

@@ -9,7 +9,7 @@ Package: vyatta-op-qos
 Architecture: all
 Depends: vyatta-op,
  vyatta-bash | bash (>= 3.1),
- iproute | vyatta-iproute,
+ iproute2 | vyatta-iproute,
  libtree-simple-perl
 Suggests: util-linux (>= 2.13-5),
  ethtool
